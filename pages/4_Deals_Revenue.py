@@ -100,9 +100,3 @@ st.dataframe(tbl, use_container_width=True, hide_index=True,
                  "quote_gbv_usd": st.column_config.NumberColumn("Quote GBV",  format="$%.0f"),
              })
 
-st.download_button(
-    "📥 Download deals table (CSV)",
-    tbl.to_csv(index=False).encode("utf-8"),
-    file_name=f"deals_{pd.Timestamp.today().strftime('%Y%m%d')}.csv",
-    mime="text/csv",
-)

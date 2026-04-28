@@ -116,9 +116,3 @@ st.dataframe(tbl, use_container_width=True, hide_index=True,
                  "cancellation_rate_pct": st.column_config.NumberColumn("Cancel%",format="%.1f%%"),
              })
 
-st.download_button(
-    "📥 Download tour detail (CSV)",
-    tbl.to_csv(index=False).encode("utf-8"),
-    file_name=f"tours_{pd.Timestamp.today().strftime('%Y%m%d')}.csv",
-    mime="text/csv",
-)

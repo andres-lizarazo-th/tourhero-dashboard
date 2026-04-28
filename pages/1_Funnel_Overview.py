@@ -212,9 +212,3 @@ st.dataframe(seg_tbl, use_container_width=True, hide_index=True,
                  "Onb30%":   st.column_config.NumberColumn("Onb30%",   format="%.2f%%"),
              })
 
-st.download_button(
-    "📥 Download segment breakdown (CSV)",
-    seg_tbl.to_csv(index=False).encode("utf-8"),
-    file_name=f"funnel_segments_{d_from}_to_{d_to}.csv",
-    mime="text/csv",
-)

@@ -169,9 +169,3 @@ tbl = tbl.sort_values("time_received", ascending=False)
 
 st.dataframe(tbl, use_container_width=True, hide_index=True)
 
-st.download_button(
-    "📥 Download inbox table (CSV)",
-    tbl.to_csv(index=False).encode("utf-8"),
-    file_name=f"inbox_{pd.Timestamp.today().strftime('%Y%m%d')}.csv",
-    mime="text/csv",
-)

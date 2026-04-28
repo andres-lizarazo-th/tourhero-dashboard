@@ -90,9 +90,3 @@ st.dataframe(tbl, use_container_width=True, hide_index=True,
                  "converted":     st.column_config.CheckboxColumn("Converted"),
              })
 
-st.download_button(
-    "📥 Download organic leads (CSV)",
-    tbl.to_csv(index=False).encode("utf-8"),
-    file_name=f"organic_{pd.Timestamp.today().strftime('%Y%m%d')}.csv",
-    mime="text/csv",
-)

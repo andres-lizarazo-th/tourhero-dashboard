@@ -122,9 +122,3 @@ st.dataframe(camp_tbl, use_container_width=True, hide_index=True,
                  "Unsub%":  st.column_config.NumberColumn("Unsub%",  format="%.2f%%"),
              })
 
-st.download_button(
-    "📥 Download campaign performance (CSV)",
-    camp_tbl.to_csv(index=False).encode("utf-8"),
-    file_name=f"campaigns_{d_from}_to_{d_to}.csv",
-    mime="text/csv",
-)
