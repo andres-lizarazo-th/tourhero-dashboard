@@ -1,5 +1,51 @@
 # Streamlit Cloud Deployment Guide
 
+## Repo architecture
+
+```
+tourhero-data/pipeline/dashboard/   ← SOURCE OF TRUTH (private, github.com/tourhero/tourhero-data)
+tourhero-dashboard/                 ← STREAMLIT DEPLOY REPO (private, github.com/andres-lizarazo-th/tourhero-dashboard)
+```
+
+Both repos live on your Desktop at `~/Desktop/Tourhero/`. Dashboard code is developed in `tourhero-data` and synced to `tourhero-dashboard` using `deploy.sh`. Streamlit Cloud watches `tourhero-dashboard` and redeploys automatically on every push.
+
+**Never edit files directly in `tourhero-dashboard/`** — they will be overwritten on the next deploy.
+
+---
+
+## Day-to-day workflow
+
+### 1 — Make changes in tourhero-data
+
+Edit any file inside `pipeline/dashboard/` as normal.
+
+### 2 — Deploy to Streamlit Cloud
+
+```bash
+cd ~/Desktop/Tourhero/tourhero-data/pipeline/dashboard
+bash deploy.sh                          # auto commit message
+bash deploy.sh "feat: add new chart"    # custom commit message
+bash deploy.sh --dry-run                # preview what would change
+```
+
+The script:
+1. `rsync`s all dashboard files to `~/Desktop/Tourhero/tourhero-dashboard/`
+2. Commits and pushes to `github.com/andres-lizarazo-th/tourhero-dashboard`
+3. Streamlit Cloud picks up the push and redeploys (usually < 2 min)
+
+**Live URL:** https://tourhero-dashboardgtm.streamlit.app
+
+### 3 — Also commit to tourhero-data (source of truth)
+
+```bash
+cd ~/Desktop/Tourhero/tourhero-data
+git add pipeline/dashboard/
+git commit -m "feat(dashboard): ..."
+git push origin develop
+```
+
+---
+
 ## Local development
 
 ```bash
