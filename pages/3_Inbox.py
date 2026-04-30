@@ -6,7 +6,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
 
 st.set_page_config(page_title="Inbox", layout="wide")
-st.title("📥 Inbox")
+
+st.markdown("""
+<style>
+[data-testid="stElementToolbar"] {display: none !important;}
+[data-testid="stDownloadButton"] {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+CHART_CFG = {"displayModeBar": False}
+
+st.title("Inbox")
 
 sql = f"""
 SELECT channel, message_id, time_received, week_start, month_key,
@@ -67,7 +77,7 @@ with col1:
                  labels={dim:"Period","count":"Messages"},
                  color_discrete_sequence=["#6366f1","#f59e0b"])
     fig.update_layout(height=300, legend_title="Channel")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 with col2:
     sent_ts = (fdf.groupby([dim,"reply_sentiment"])["message_id"]
@@ -82,7 +92,7 @@ with col2:
                   color_discrete_map=SENTIMENT_COLORS,
                   category_orders={"reply_sentiment": SENTIMENT_ORDER})
     fig2.update_layout(height=300, legend_title="Sentiment")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 
 # ── Row 2: Category breakdown + Temp donut ───────────────────────────────────
 col3, col4 = st.columns(2)
@@ -97,7 +107,7 @@ with col3:
                   color_discrete_map=SENTIMENT_COLORS,
                   category_orders={"reply_sentiment": SENTIMENT_ORDER})
     fig3.update_layout(height=420, legend_title="Sentiment")
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True, config=CHART_CFG)
 
 with col4:
     # Sentiment donut
@@ -107,7 +117,7 @@ with col4:
                   color="reply_sentiment",
                   color_discrete_map=SENTIMENT_COLORS)
     fig4.update_layout(height=260)
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, use_container_width=True, config=CHART_CFG)
 
     # Email temperature donut
     email_df = fdf[fdf["channel"]=="email"]
@@ -117,7 +127,7 @@ with col4:
         fig5 = px.pie(temp_cnt, names="temperature", values="count",
                       title="Email Temperature", hole=0.45)
         fig5.update_layout(height=260)
-        st.plotly_chart(fig5, use_container_width=True)
+        st.plotly_chart(fig5, use_container_width=True, config=CHART_CFG)
 
 # ── Row 3: Replies by Inbox Manager ──────────────────────────────────────────
 mgr_df = fdf[fdf["manager"].notna()].copy()
@@ -137,7 +147,7 @@ if len(mgr_df) > 0:
                       color_discrete_map=SENTIMENT_COLORS,
                       category_orders={"reply_sentiment": SENTIMENT_ORDER})
         fig6.update_layout(height=max(280, len(mgr_total) * 40), legend_title="Sentiment")
-        st.plotly_chart(fig6, use_container_width=True)
+        st.plotly_chart(fig6, use_container_width=True, config=CHART_CFG)
 
     with col6:
         # Replied vs not replied per manager
@@ -156,7 +166,7 @@ if len(mgr_df) > 0:
                       labels={"count":"Messages","manager":"Manager"},
                       color_discrete_map={"Replied":"#22c55e","Not Replied":"#94a3b8"})
         fig7.update_layout(height=max(280, len(mgr_total) * 40), legend_title="")
-        st.plotly_chart(fig7, use_container_width=True)
+        st.plotly_chart(fig7, use_container_width=True, config=CHART_CFG)
 
 st.divider()
 st.subheader("Inbox Table")

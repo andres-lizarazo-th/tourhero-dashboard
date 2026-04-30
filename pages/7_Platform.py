@@ -6,7 +6,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
 
 st.set_page_config(page_title="Platform Performance", layout="wide")
-st.title("🏔️ Platform Performance")
+
+st.markdown("""
+<style>
+[data-testid="stElementToolbar"] {display: none !important;}
+[data-testid="stDownloadButton"] {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+CHART_CFG = {"displayModeBar": False}
+
+st.title("Platform Performance")
 
 sql = f"""
 SELECT tour_id, tour_name, state, active_status, start_date, end_date,
@@ -61,7 +71,7 @@ with col1:
                  color_discrete_sequence=["#6366f1"],
                  labels={dim:"Period","tours":"Tours"})
     fig.update_layout(height=300)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 with col2:
     gbv_ts = fdf_gbv.groupby(dim)["confirmed_gbv_usd"].sum().reset_index()
@@ -70,7 +80,7 @@ with col2:
                   color_discrete_sequence=["#22c55e"],
                   labels={dim:"Period","confirmed_gbv_usd":"GBV (USD)"})
     fig2.update_layout(height=300, yaxis_tickprefix="$", yaxis_tickformat=",.0f")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 
 col3, col4 = st.columns(2)
 with col3:
@@ -79,7 +89,7 @@ with col3:
     fig3 = px.pie(status_counts, names="status", values="count",
                   title="Tours by Status", hole=0.4)
     fig3.update_layout(height=300)
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True, config=CHART_CFG)
 
 with col4:
     gbv_status = fdf_gbv.groupby("active_status")["confirmed_gbv_usd"].sum().reset_index()
@@ -89,7 +99,7 @@ with col4:
                   color_discrete_sequence=["#f59e0b"],
                   labels={"confirmed_gbv_usd":"GBV (USD)","active_status":"Status"})
     fig4.update_layout(height=300, xaxis_tickprefix="$", xaxis_tickformat=",.0f")
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, use_container_width=True, config=CHART_CFG)
 
 st.divider()
 st.subheader("Top Heroes by GBV")

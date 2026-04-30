@@ -6,7 +6,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
 
 st.set_page_config(page_title="Deals & Revenue", layout="wide")
-st.title("💰 Deals & Revenue")
+
+st.markdown("""
+<style>
+[data-testid="stElementToolbar"] {display: none !important;}
+[data-testid="stDownloadButton"] {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+CHART_CFG = {"displayModeBar": False}
+
+st.title("Deals & Revenue")
 
 sql = f"""
 SELECT deal_id, hero_email, hero_first_name, lead_segment, trip_name,
@@ -56,7 +66,7 @@ with col1:
                  title="Deals per " + ("Week" if granularity=="Weekly" else "Month"),
                  labels={dim:"Period","count":"Deals"})
     fig.update_layout(height=300)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 with col2:
     gbv_ts = fdf.groupby(dim)["est_gbv"].sum().reset_index()
@@ -65,7 +75,7 @@ with col2:
                   labels={dim:"Period","est_gbv":"Est. GBV (USD)"},
                   color_discrete_sequence=["#22c55e"])
     fig2.update_layout(height=300, yaxis_tickprefix="$", yaxis_tickformat=",.0f")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 
 col3, col4 = st.columns(2)
 with col3:
@@ -74,7 +84,7 @@ with col3:
     fig3 = px.pie(status_pie, names="status", values="count",
                   title="Deals by Status", hole=0.4)
     fig3.update_layout(height=300)
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True, config=CHART_CFG)
 
 with col4:
     tier_ch = fdf.groupby(["deal_tier","deal_channel"])["deal_id"].count().reset_index(name="count")
@@ -82,7 +92,7 @@ with col4:
                   title="Deals by Tier & Channel", barmode="stack",
                   labels={"count":"Deals"})
     fig4.update_layout(height=300)
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, use_container_width=True, config=CHART_CFG)
 
 st.divider()
 st.subheader("Deals Table")

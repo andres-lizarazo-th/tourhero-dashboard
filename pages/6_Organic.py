@@ -6,7 +6,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
 
 st.set_page_config(page_title="Organic", layout="wide")
-st.title("🌱 Organic")
+
+st.markdown("""
+<style>
+[data-testid="stElementToolbar"] {display: none !important;}
+[data-testid="stDownloadButton"] {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+CHART_CFG = {"displayModeBar": False}
+
+st.title("Organic")
 
 sql = f"""
 SELECT email, full_name, first_request_at, week_start, month_key,
@@ -74,7 +84,7 @@ with col1:
                  title="Requests & Conversions per " + ("Week" if granularity=="Weekly" else "Month"),
                  color_discrete_sequence=["#6366f1","#22c55e"])
     fig.update_layout(height=300, legend_title="")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 with col2:
     dest = fdf.groupby("latest_destination").agg(
@@ -85,7 +95,7 @@ with col2:
                   title="Top 15 Destinations",
                   color_discrete_sequence=["#6366f1"])
     fig2.update_layout(height=400, margin=dict(t=30,b=10))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 
 st.divider()
 
@@ -111,7 +121,7 @@ with q1:
                   color_discrete_map=QUALIFY_COLORS,
                   labels={"count":"Leads","qualifying_answer":"Answer"})
     fig3.update_layout(height=280, showlegend=False)
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True, config=CHART_CFG)
 
 with q2:
     ref = fdf["tracking_referrer_type"].value_counts().reset_index()
@@ -120,7 +130,7 @@ with q2:
                   title="Referrer Type (how they found us)", hole=0.4,
                   color_discrete_sequence=px.colors.qualitative.Set2)
     fig4.update_layout(height=280)
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, use_container_width=True, config=CHART_CFG)
 
 q3, q4 = st.columns(2)
 with q3:
@@ -132,7 +142,7 @@ with q3:
                   color_discrete_sequence=["#6366f1"],
                   labels={"count":"Leads","domain":"Domain"})
     fig5.update_layout(height=320)
-    st.plotly_chart(fig5, use_container_width=True)
+    st.plotly_chart(fig5, use_container_width=True, config=CHART_CFG)
 
 with q4:
     land = (fdf["tracking_landing_page"].value_counts()
@@ -143,7 +153,7 @@ with q4:
                   color_discrete_sequence=["#f59e0b"],
                   labels={"count":"Leads","page":"Page"})
     fig6.update_layout(height=320)
-    st.plotly_chart(fig6, use_container_width=True)
+    st.plotly_chart(fig6, use_container_width=True, config=CHART_CFG)
 
 st.divider()
 
@@ -158,14 +168,14 @@ if len(grp_df) > 0:
                             color_discrete_sequence=["#6366f1"],
                             labels={"group_min_size":"Min group size","count":"Leads"})
         fig7.update_layout(height=260)
-        st.plotly_chart(fig7, use_container_width=True)
+        st.plotly_chart(fig7, use_container_width=True, config=CHART_CFG)
     with g2:
         fig8 = px.histogram(grp_df, x="group_max_size", nbins=15,
                             title="Max Group Size Distribution",
                             color_discrete_sequence=["#22c55e"],
                             labels={"group_max_size":"Max group size","count":"Leads"})
         fig8.update_layout(height=260)
-        st.plotly_chart(fig8, use_container_width=True)
+        st.plotly_chart(fig8, use_container_width=True, config=CHART_CFG)
     st.divider()
 
 # ── Organic Leads Table ───────────────────────────────────────────────────────

@@ -5,14 +5,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
 
 st.set_page_config(page_title="Lead Explorer", layout="wide")
-st.title("🔍 Lead Explorer")
+
+st.markdown("""
+<style>
+[data-testid="stElementToolbar"] {display: none !important;}
+[data-testid="stDownloadButton"] {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+CHART_CFG = {"displayModeBar": False}
+
+st.title("Lead Explorer")
 st.caption("Filters query BigQuery directly — click **Search** to apply.")
 
 # ── Search form (server-side BQ filtering for 4.8M row table) ─────────────────
 with st.form("lead_search"):
     c1, c2, c3 = st.columns(3)
     with c1:
-        seg = st.multiselect("Segment", ["vip","creator","mba","faith","organic","vip-prequal","unmatched-email-addresses"])
+        seg = st.multiselect("Segment", ["vip","qualifying","creator","mba","faith","organic","unmatched-email-addresses"])
         stage = st.multiselect("Pipeline Stage", [
             "1 - Scraped","2 - Enriched","3 - Contacted","4 - Replied",
             "5 - Call Booked","6 - Deal Created"
@@ -26,7 +36,7 @@ with st.form("lead_search"):
         search_name  = st.text_input("Name contains")
         limit = st.selectbox("Max rows", [500, 1000, 5000], index=1)
 
-    submitted = st.form_submit_button("🔍 Search", type="primary")
+    submitted = st.form_submit_button("Search", type="primary")
 
 if not submitted:
     st.info("Set filters above and click Search.")

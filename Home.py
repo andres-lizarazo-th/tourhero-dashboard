@@ -9,7 +9,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.title("🏔️ TourHero GTM Dashboard")
+st.title("TourHero GTM Dashboard")
 st.caption(f"Connected to BigQuery project `{PROJECT}` · cache TTL 1h")
 
 st.markdown("""
@@ -31,7 +31,7 @@ Use the sidebar to navigate between pages. Each page has its own filters.
 - **Date range** — every page has a date filter. Default is **Year-to-date (YTD)**.
 - **Granularity** — toggle between **Weekly** and **Monthly** on charts that show trends.
 - **Segments** — filter by lead segment (`creator`, `vip`, `vip-prequal`, `mba`, `faith`, `organic`, `unmatched-email-addresses`) on relevant pages.
-- **Download** — most tables have a `📥 Download CSV` button below them for ad-hoc analysis.
+- **Segments** — additional filter available on Funnel Overview and Inbox pages.
 
 ### Data freshness
 
