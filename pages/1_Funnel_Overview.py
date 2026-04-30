@@ -125,6 +125,19 @@ st.divider()
 # ── Single trend chart ────────────────────────────────────────────────────────
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
 
+# Outreach touches volume (always shown)
+st.markdown("**Outreach Touches per Week** (aggregated across selected segments)")
+ts_touches = (fdf.groupby(dim)[["contacted"]].sum().reset_index())
+
+fig_touches = px.bar(
+    ts_touches, x=dim, y="contacted",
+    labels={dim: "Period", "contacted": "Touches"},
+    color_discrete_sequence=["#6366f1"],
+)
+fig_touches.update_layout(height=320, margin=dict(t=20, b=20), showlegend=False)
+st.plotly_chart(fig_touches, use_container_width=True, config=CHART_CFG)
+
+# Selectable trend metric
 st.markdown(f"**Trend: {trend_metric_label}** (aggregated across selected segments via sidebar filter)")
 # Aggregate across selected segments only (no color breakdown)
 ts = (fdf.groupby(dim)
@@ -134,10 +147,10 @@ ts = (fdf.groupby(dim)
 fig = px.line(
     ts, x=dim, y=trend_metric,
     labels={dim: "Period", trend_metric: trend_metric_label},
-    color_discrete_sequence=["#6366f1"],
+    color_discrete_sequence=["#22c55e"],
     markers=True,
 )
-fig.update_layout(height=340, margin=dict(t=20, b=20), showlegend=False)
+fig.update_layout(height=300, margin=dict(t=20, b=20), showlegend=False)
 st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 # ── GTM conversion rate trend ─────────────────────────────────────────────────
