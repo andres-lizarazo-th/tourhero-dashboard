@@ -187,7 +187,8 @@ b3, b4 = st.columns(2)
 with b3:
     if total_deals:
         wr_ch = (deals.groupby("deal_channel")
-                 .apply(lambda x: (x["deal_status_category"] == "Published").sum() / len(x) * 100)
+                 .apply(lambda x: (x["deal_status_category"] == "Published").sum() / len(x) * 100,
+                        include_groups=False)
                  .reset_index(name="win_rate")
                  .sort_values("win_rate", ascending=True))
         fig = px.bar(wr_ch, x="win_rate", y="deal_channel", orientation="h",
@@ -199,7 +200,8 @@ with b3:
 with b4:
     if total_deals:
         wr_tier = (deals.groupby("deal_tier")
-                   .apply(lambda x: (x["deal_status_category"] == "Published").sum() / len(x) * 100)
+                   .apply(lambda x: (x["deal_status_category"] == "Published").sum() / len(x) * 100,
+                          include_groups=False)
                    .reset_index(name="win_rate")
                    .sort_values("win_rate", ascending=True))
         fig = px.bar(wr_tier, x="win_rate", y="deal_tier", orientation="h",
