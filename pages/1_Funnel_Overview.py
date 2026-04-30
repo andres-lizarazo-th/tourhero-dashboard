@@ -125,17 +125,19 @@ st.divider()
 # ── Single trend chart ────────────────────────────────────────────────────────
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
 
-st.markdown(f"**Trend: {trend_metric_label}** (one line per segment; filter via sidebar)")
-ts = (fdf.groupby([dim, "lead_segment"])
+st.markdown(f"**Trend: {trend_metric_label}** (aggregated across selected segments via sidebar filter)")
+# Aggregate across selected segments only (no color breakdown)
+ts = (fdf.groupby(dim)
       [list(METRIC_OPTIONS.values()) + ["planning_within_60d"]]
       .sum().reset_index())
 
 fig = px.line(
-    ts, x=dim, y=trend_metric, color="lead_segment",
-    labels={dim: "Period", trend_metric: trend_metric_label, "lead_segment": "Segment"},
+    ts, x=dim, y=trend_metric,
+    labels={dim: "Period", trend_metric: trend_metric_label},
+    color_discrete_sequence=["#6366f1"],
     markers=True,
 )
-fig.update_layout(height=340, legend_title="Segment", margin=dict(t=20, b=20))
+fig.update_layout(height=340, margin=dict(t=20, b=20), showlegend=False)
 st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 # ── GTM conversion rate trend ─────────────────────────────────────────────────

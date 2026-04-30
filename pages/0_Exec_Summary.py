@@ -102,7 +102,7 @@ with r4: st.metric("Deal Rate (60d)",        fmt_pct(deal_60d_rt),
                    help="Touches that led to a deal created within 60 days")
 
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
-ts = funnel.groupby(dim)[["contacted", "planning_called", "planning_within_60d"]].sum().reset_index()
+ts = funnel.groupby(dim)[["contacted", "planning_called", "plan_60d"]].sum().reset_index()
 
 a1, a2 = st.columns(2)
 with a1:
@@ -121,7 +121,7 @@ with a2:
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 st.markdown("**GTM Conversion Rate Trend (60d)**")
-ts["GTM Conv %"] = (ts["planning_within_60d"] / ts["contacted"] * 100).where(ts["contacted"] > 0)
+ts["GTM Conv %"] = (ts["plan_60d"] / ts["contacted"] * 100).where(ts["contacted"] > 0)
 fig_gtm = px.line(ts, x=dim, y="GTM Conv %",
                   title="Planning Conv. % per " + ("Week" if granularity == "Weekly" else "Month"),
                   labels={"GTM Conv %": "%", dim: "Period"},
