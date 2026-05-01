@@ -59,9 +59,9 @@ SELECT lead_segment, cohort_week, month_key,
   SUM(vip_dealt)             AS vip_dealt,
   SUM(onboarding_called)     AS onboarding_called,
   SUM(planning_called)       AS planning_called,
-  SUM(onboarding_within_60d) AS onboarding_within_60d,
-  SUM(planning_within_60d)   AS planning_within_60d,
-  SUM(deal_within_60d)       AS deal_within_60d
+  SUM(onboarding_within_180d) AS onboarding_within_180d,
+  SUM(planning_within_180d)   AS planning_within_180d,
+  SUM(deal_within_180d)       AS deal_within_180d
 FROM `{PROJECT}`.analytics.v_funnel_by_segment
 WHERE cohort_week BETWEEN '{d_from}' AND '{d_to}'
 GROUP BY 1, 2, 3
@@ -80,14 +80,14 @@ st.caption(
 )
 
 # ── Volume scorecards ─────────────────────────────────────────────────────────
-contacted  = int(fdf["contacted"].sum())
-replied    = int(fdf["replied"].sum())
-onb        = int(fdf["onboarding_called"].sum())
-planning   = int(fdf["planning_called"].sum())
-dealt      = int(fdf["dealt"].sum())
-onb_60d    = int(fdf["onboarding_within_60d"].sum())
-plan_60d   = int(fdf["planning_within_60d"].sum())
-deal_60d   = int(fdf["deal_within_60d"].sum())
+contacted   = int(fdf["contacted"].sum())
+replied     = int(fdf["replied"].sum())
+onb         = int(fdf["onboarding_called"].sum())
+planning    = int(fdf["planning_called"].sum())
+dealt       = int(fdf["dealt"].sum())
+onb_180d    = int(fdf["onboarding_within_180d"].sum())
+plan_180d   = int(fdf["planning_within_180d"].sum())
+deal_180d   = int(fdf["deal_within_180d"].sum())
 
 st.markdown("**Volumes**")
 v1, v2, v3, v4, v5, v6 = st.columns(6)
@@ -101,24 +101,24 @@ with v5: st.metric("Deals Created",     f"{dealt:,}")
 with v6: st.metric("VIP Deals",         f"{int(fdf['vip_dealt'].sum()):,}")
 
 # ── Conversion rate scorecards ────────────────────────────────────────────────
-reply_rt     = replied   / contacted * 100 if contacted else 0
-onb_60d_rt   = onb_60d   / contacted * 100 if contacted else 0
-plan_60d_rt  = plan_60d  / contacted * 100 if contacted else 0
-deal_60d_rt  = deal_60d  / contacted * 100 if contacted else 0
-reply_to_plan = planning / replied   * 100 if replied   else 0
+reply_rt      = replied    / contacted * 100 if contacted else 0
+onb_180d_rt   = onb_180d   / contacted * 100 if contacted else 0
+plan_180d_rt  = plan_180d  / contacted * 100 if contacted else 0
+deal_180d_rt  = deal_180d  / contacted * 100 if contacted else 0
+reply_to_plan = planning   / replied   * 100 if replied   else 0
 
-st.markdown("**Conversion Rates (60-day cohort window)**")
+st.markdown("**Conversion Rates (180-day cohort window)**")
 r1, r2, r3, r4, r5 = st.columns(5)
 with r1: st.metric("Reply Rate",            f"{reply_rt:.1f}%",
                    help="Replied / Outreach Touches")
 with r2: st.metric("Reply to Planning",     f"{reply_to_plan:.1f}%",
                    help="Planning Calls / Replied")
-with r3: st.metric("GTM Conv. (60d)",       f"{plan_60d_rt:.2f}%",
-                   help="Touches that led to a planning call within 60 days. Primary GTM KPI.")
-with r4: st.metric("Onboarding Rate (60d)", f"{onb_60d_rt:.2f}%",
-                   help="Touches that led to an onboarding call within 60 days")
-with r5: st.metric("Deal Rate (60d)",       f"{deal_60d_rt:.2f}%",
-                   help="Touches that led to a deal created within 60 days")
+with r3: st.metric("GTM Conv. (180d)",      f"{plan_180d_rt:.2f}%",
+                   help="Touches that led to a planning call within 180 days. Primary GTM KPI.")
+with r4: st.metric("Onboarding Rate (180d)",f"{onb_180d_rt:.2f}%",
+                   help="Touches that led to an onboarding call within 180 days")
+with r5: st.metric("Deal Rate (180d)",      f"{deal_180d_rt:.2f}%",
+                   help="Touches that led to a deal created within 180 days")
 
 st.divider()
 
@@ -141,7 +141,7 @@ st.plotly_chart(fig_touches, use_container_width=True, config=CHART_CFG)
 st.markdown(f"**Trend: {trend_metric_label}** (aggregated across selected segments via sidebar filter)")
 # Aggregate across selected segments only (no color breakdown)
 ts = (fdf.groupby(dim)
-      [list(METRIC_OPTIONS.values()) + ["planning_within_60d"]]
+      [list(METRIC_OPTIONS.values()) + ["planning_within_180d"]]
       .sum().reset_index())
 
 fig = px.line(
@@ -154,10 +154,10 @@ fig.update_layout(height=300, margin=dict(t=20, b=20), showlegend=False)
 st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 # ── GTM conversion rate trend ─────────────────────────────────────────────────
-st.markdown("**GTM Conversion Rate (60d): Planning Calls / Outreach Touches**")
-ts_total = fdf.groupby(dim)[["contacted", "planning_within_60d"]].sum().reset_index()
+st.markdown("**GTM Conversion Rate (180d): Planning Calls / Outreach Touches**")
+ts_total = fdf.groupby(dim)[["contacted", "planning_within_180d"]].sum().reset_index()
 ts_total["GTM Conv %"] = (
-    ts_total["planning_within_60d"] / ts_total["contacted"] * 100
+    ts_total["planning_within_180d"] / ts_total["contacted"] * 100
 ).where(ts_total["contacted"] > 0)
 
 fig_gtm = px.line(

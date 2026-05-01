@@ -59,28 +59,28 @@ SELECT cohort_week, month_key, lead_segment,
   SUM(onboarding_called)      AS onboarding_called,
   SUM(planning_called)        AS planning_called,
   SUM(dealt)                  AS dealt,
-  SUM(onboarding_within_60d)  AS onb_60d,
-  SUM(planning_within_60d)    AS plan_60d,
-  SUM(deal_within_60d)        AS deal_60d
+  SUM(onboarding_within_180d) AS onb_180d,
+  SUM(planning_within_180d)   AS plan_180d,
+  SUM(deal_within_180d)       AS deal_180d
 FROM `{PROJECT}`.analytics.v_funnel_by_segment
 WHERE cohort_week BETWEEN '{d_from}' AND '{d_to}'
 GROUP BY 1, 2, 3
 """
 funnel = query(funnel_sql)
 
-contacted = int(funnel["contacted"].sum())
-replied   = int(funnel["replied"].sum())
-planning  = int(funnel["planning_called"].sum())
-onb       = int(funnel["onboarding_called"].sum())
-dealt     = int(funnel["dealt"].sum())
-onb_60d   = int(funnel["onb_60d"].sum())
-plan_60d  = int(funnel["plan_60d"].sum())
-deal_60d  = int(funnel["deal_60d"].sum())
+contacted  = int(funnel["contacted"].sum())
+replied    = int(funnel["replied"].sum())
+planning   = int(funnel["planning_called"].sum())
+onb        = int(funnel["onboarding_called"].sum())
+dealt      = int(funnel["dealt"].sum())
+onb_180d   = int(funnel["onb_180d"].sum())
+plan_180d  = int(funnel["plan_180d"].sum())
+deal_180d  = int(funnel["deal_180d"].sum())
 
-reply_rate    = replied  / contacted * 100 if contacted else 0
-plan_60d_rt   = plan_60d / contacted * 100 if contacted else 0
-onb_60d_rt    = onb_60d  / contacted * 100 if contacted else 0
-deal_60d_rt   = deal_60d / contacted * 100 if contacted else 0
+reply_rate     = replied   / contacted * 100 if contacted else 0
+plan_180d_rt   = plan_180d / contacted * 100 if contacted else 0
+onb_180d_rt    = onb_180d  / contacted * 100 if contacted else 0
+deal_180d_rt   = deal_180d / contacted * 100 if contacted else 0
 
 st.markdown("**Volumes**")
 v1, v2, v3, v4, v5 = st.columns(5)
@@ -91,18 +91,18 @@ with v4: st.metric("Planning Calls",   fmt_num(planning),
                    help="GTM conversion event — lead committed to plan a trip.")
 with v5: st.metric("Deals Created",    fmt_num(dealt))
 
-st.markdown("**Conversion Rates (60-day cohort window)**")
+st.markdown("**Conversion Rates (180-day cohort window)**")
 r1, r2, r3, r4 = st.columns(4)
-with r1: st.metric("Contact to Reply",       fmt_pct(reply_rate))
-with r2: st.metric("GTM Conv. (60d)",        fmt_pct(plan_60d_rt),
-                   help="Touches that led to a planning call within 60 days. Primary GTM KPI.")
-with r3: st.metric("Onboarding Rate (60d)",  fmt_pct(onb_60d_rt),
-                   help="Touches that led to an onboarding call within 60 days")
-with r4: st.metric("Deal Rate (60d)",        fmt_pct(deal_60d_rt),
-                   help="Touches that led to a deal created within 60 days")
+with r1: st.metric("Contact to Reply",        fmt_pct(reply_rate))
+with r2: st.metric("GTM Conv. (180d)",        fmt_pct(plan_180d_rt),
+                   help="Touches that led to a planning call within 180 days. Primary GTM KPI.")
+with r3: st.metric("Onboarding Rate (180d)",  fmt_pct(onb_180d_rt),
+                   help="Touches that led to an onboarding call within 180 days")
+with r4: st.metric("Deal Rate (180d)",        fmt_pct(deal_180d_rt),
+                   help="Touches that led to a deal created within 180 days")
 
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
-ts = funnel.groupby(dim)[["contacted", "planning_called", "plan_60d"]].sum().reset_index()
+ts = funnel.groupby(dim)[["contacted", "planning_called", "plan_180d"]].sum().reset_index()
 
 a1, a2 = st.columns(2)
 with a1:
@@ -120,8 +120,8 @@ with a2:
     fig.update_layout(height=260, margin=dict(t=40, b=20))
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
-st.markdown("**GTM Conversion Rate Trend (60d)**")
-ts["GTM Conv %"] = (ts["plan_60d"] / ts["contacted"] * 100).where(ts["contacted"] > 0)
+st.markdown("**GTM Conversion Rate Trend (180d)**")
+ts["GTM Conv %"] = (ts["plan_180d"] / ts["contacted"] * 100).where(ts["contacted"] > 0)
 fig_gtm = px.line(ts, x=dim, y="GTM Conv %",
                   title="Planning Conv. % per " + ("Week" if granularity == "Weekly" else "Month"),
                   labels={"GTM Conv %": "%", dim: "Period"},
