@@ -181,27 +181,27 @@ st.subheader("Segment Breakdown")
 
 # ── Segment table ─────────────────────────────────────────────────────────────
 seg_tbl = fdf.groupby("lead_segment").agg(
-    Touches=("contacted",            "sum"),
-    Replied=("replied",              "sum"),
-    Onboarding=("onboarding_called", "sum"),
-    Planning=("planning_called",     "sum"),
-    Deals=("dealt",                  "sum"),
-    VIP_Deals=("vip_dealt",          "sum"),
-    Onb_60d=("onboarding_within_60d","sum"),
-    Plan_60d=("planning_within_60d", "sum"),
-    Deal_60d=("deal_within_60d",     "sum"),
+    Touches=("contacted",             "sum"),
+    Replied=("replied",               "sum"),
+    Onboarding=("onboarding_called",  "sum"),
+    Planning=("planning_called",      "sum"),
+    Deals=("dealt",                   "sum"),
+    VIP_Deals=("vip_dealt",           "sum"),
+    Onb_180d=("onboarding_within_180d","sum"),
+    Plan_180d=("planning_within_180d", "sum"),
+    Deal_180d=("deal_within_180d",     "sum"),
 ).reset_index()
 
-seg_tbl["Reply%"]      = (seg_tbl["Replied"]   / seg_tbl["Touches"] * 100).round(1)
-seg_tbl["GTM Conv%"]   = (seg_tbl["Plan_60d"]  / seg_tbl["Touches"] * 100).round(2)
-seg_tbl["Onb60%"]      = (seg_tbl["Onb_60d"]   / seg_tbl["Touches"] * 100).round(2)
-seg_tbl["Deal60%"]     = (seg_tbl["Deal_60d"]  / seg_tbl["Touches"] * 100).round(2)
-seg_tbl = seg_tbl.sort_values("Plan_60d", ascending=False)
+seg_tbl["Reply%"]      = (seg_tbl["Replied"]    / seg_tbl["Touches"] * 100).round(1)
+seg_tbl["GTM Conv%"]   = (seg_tbl["Plan_180d"]  / seg_tbl["Touches"] * 100).round(2)
+seg_tbl["Onb180%"]     = (seg_tbl["Onb_180d"]   / seg_tbl["Touches"] * 100).round(2)
+seg_tbl["Deal180%"]    = (seg_tbl["Deal_180d"]  / seg_tbl["Touches"] * 100).round(2)
+seg_tbl = seg_tbl.sort_values("Plan_180d", ascending=False)
 
 st.dataframe(seg_tbl, use_container_width=True, hide_index=True,
              column_config={
                  "Reply%":    st.column_config.NumberColumn("Reply%",    format="%.1f%%"),
                  "GTM Conv%": st.column_config.NumberColumn("GTM Conv%", format="%.2f%%"),
-                 "Onb60%":    st.column_config.NumberColumn("Onb60%",    format="%.2f%%"),
-                 "Deal60%":   st.column_config.NumberColumn("Deal60%",   format="%.2f%%"),
+                 "Onb180%":   st.column_config.NumberColumn("Onb180%",   format="%.2f%%"),
+                 "Deal180%":  st.column_config.NumberColumn("Deal180%",  format="%.2f%%"),
              })
