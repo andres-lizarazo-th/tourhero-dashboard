@@ -50,7 +50,7 @@ else:
 
 # ── Load ──────────────────────────────────────────────────────────────────────
 sql = f"""
-SELECT lead_segment, cohort_week, month_key,
+SELECT lead_segment, campaign_id, campaign_name, cohort_week, month_key,
   SUM(leads_count)           AS leads_count,
   SUM(contacted)             AS contacted,
   SUM(replied)               AS replied,
@@ -64,19 +64,25 @@ SELECT lead_segment, cohort_week, month_key,
   SUM(deal_within_180d)       AS deal_within_180d
 FROM `{PROJECT}`.analytics.v_funnel_by_segment
 WHERE cohort_week BETWEEN '{d_from}' AND '{d_to}'
-GROUP BY 1, 2, 3
+GROUP BY 1, 2, 3, 4, 5
 """
 df = query(sql)
 
 all_segs = sorted(df["lead_segment"].dropna().unique())
+all_camps = sorted(df["campaign_name"].dropna().unique())
 with st.sidebar:
-    segs = st.multiselect("Segment", all_segs, default=all_segs)
+    segs  = st.multiselect("Segment",  all_segs,  default=all_segs)
+    camps = st.multiselect("Campaign", all_camps, default=[])
 
 fdf = df[df["lead_segment"].isin(segs)] if segs else df
+if camps:
+    fdf = fdf[fdf["campaign_name"].isin(camps)]
 
+seg_label  = ", ".join(segs)  if len(segs)  < len(all_segs)  else "all"
+camp_label = ", ".join(camps) if camps else "all"
 st.caption(
     f"{d_from} to {d_to} · Granularity: **{granularity}** · "
-    f"Segments: **{', '.join(segs) if len(segs) < len(all_segs) else 'all'}**"
+    f"Segments: **{seg_label}** · Campaigns: **{camp_label}**"
 )
 
 # ── Volume scorecards ─────────────────────────────────────────────────────────

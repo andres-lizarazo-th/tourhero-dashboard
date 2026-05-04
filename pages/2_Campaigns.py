@@ -38,9 +38,10 @@ else:
 
 sql = f"""
 SELECT stat_date, week_start, month_key, campaign_id, campaign_name,
-  campaign_type, campaign_status,
+  campaign_type, campaign_status, campaign_created_at,
   sent, replied, bounced, unsubscribed, interested,
-  reply_rate_pct, bounce_rate_pct, unsub_rate_pct
+  reply_rate_pct, bounce_rate_pct, unsub_rate_pct,
+  unique_leads_total
 FROM `{PROJECT}`.bison_tracking.v_campaign_performance
 WHERE stat_date BETWEEN '{d_from}' AND '{d_to}'
 """
@@ -114,20 +115,25 @@ st.divider()
 st.subheader("Campaign Performance Table")
 
 camp_tbl = fdf[fdf["sent"] > 0].groupby("campaign_name").agg(
-    Sent=("sent",          "sum"),
-    Replies=("replied",    "sum"),
-    Bounced=("bounced",    "sum"),
-    Unsubs=("unsubscribed","sum"),
-    Interested=("interested","sum"),
+    Created=("campaign_created_at", "min"),
+    Sent=("sent",                   "sum"),
+    Unique_Leads=("unique_leads_total", "max"),  # same value for all rows of a campaign
+    Replies=("replied",             "sum"),
+    Bounced=("bounced",             "sum"),
+    Unsubs=("unsubscribed",         "sum"),
+    Interested=("interested",       "sum"),
 ).reset_index()
 camp_tbl["Reply%"]  = (camp_tbl["Replies"] / camp_tbl["Sent"] * 100).round(2)
 camp_tbl["Bounce%"] = (camp_tbl["Bounced"] / camp_tbl["Sent"] * 100).round(2)
 camp_tbl["Unsub%"]  = (camp_tbl["Unsubs"]  / camp_tbl["Sent"] * 100).round(2)
-camp_tbl = camp_tbl[camp_tbl["Sent"] > 0].sort_values("Reply%", ascending=False)
+camp_tbl["Created"] = pd.to_datetime(camp_tbl["Created"]).dt.date
+camp_tbl = camp_tbl[camp_tbl["Sent"] > 0].sort_values("Created", ascending=False)
 
 st.dataframe(camp_tbl, use_container_width=True, hide_index=True,
              column_config={
-                 "Reply%":  st.column_config.NumberColumn("Reply%",  format="%.2f%%"),
-                 "Bounce%": st.column_config.NumberColumn("Bounce%", format="%.2f%%"),
-                 "Unsub%":  st.column_config.NumberColumn("Unsub%",  format="%.2f%%"),
+                 "Created":      st.column_config.DateColumn("Created", format="YYYY-MM-DD"),
+                 "Unique_Leads": st.column_config.NumberColumn("Unique Leads"),
+                 "Reply%":       st.column_config.NumberColumn("Reply%",  format="%.2f%%"),
+                 "Bounce%":      st.column_config.NumberColumn("Bounce%", format="%.2f%%"),
+                 "Unsub%":       st.column_config.NumberColumn("Unsub%",  format="%.2f%%"),
              })
