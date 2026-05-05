@@ -7,6 +7,7 @@ from datetime import date
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
+from utils.charts import annotate
 
 st.set_page_config(page_title="Funnel Overview", layout="wide")
 st.title("Funnel Overview")
@@ -228,8 +229,9 @@ if len(monthly_agg) > 0:
                 color_discrete_sequence=[color],
                 markers=True,
             )
-            fig_r.update_layout(height=240, margin=dict(t=40, b=10), showlegend=False,
+            fig_r.update_layout(height=260, margin=dict(t=40, b=10), showlegend=False,
                                 yaxis=dict(ticksuffix="%"))
+            annotate(fig_r, fmt=".1f", pct=True)
             st.plotly_chart(fig_r, use_container_width=True, config=CHART_CFG)
 
     fig_c2p = px.line(
@@ -239,8 +241,9 @@ if len(monthly_agg) > 0:
         color_discrete_sequence=["#8b5cf6"],
         markers=True,
     )
-    fig_c2p.update_layout(height=240, margin=dict(t=40, b=10), showlegend=False,
+    fig_c2p.update_layout(height=260, margin=dict(t=40, b=10), showlegend=False,
                           yaxis=dict(ticksuffix="%"))
+    annotate(fig_c2p, fmt=".2f", pct=True)
     st.plotly_chart(fig_c2p, use_container_width=True, config=CHART_CFG)
 
 st.divider()
@@ -267,7 +270,8 @@ for col, (label, metric, color, _) in zip([t1, t2, t3, t4], TREND_CHARTS):
             labels={dim: "", metric: label},
             color_discrete_sequence=[color],
         )
-        fig_t.update_layout(height=260, margin=dict(t=40, b=10), showlegend=False)
+        fig_t.update_layout(height=280, margin=dict(t=40, b=10), showlegend=False)
+        annotate(fig_t)
         st.plotly_chart(fig_t, use_container_width=True, config=CHART_CFG)
 
 st.divider()
@@ -304,12 +308,19 @@ def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, 
         cdf[showup_col] / cdf[booked_col].replace(0, None) * 100
     ).round(1)
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[booked_col],   name="Booked",     marker_color="#6366f1"), secondary_y=False)
-    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[showup_col],   name="Showed Up",  marker_color="#22c55e"), secondary_y=False)
+    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[booked_col], name="Booked", marker_color="#6366f1",
+                         text=cdf[booked_col], textposition="outside",
+                         textfont=dict(size=10), cliponaxis=False), secondary_y=False)
+    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[showup_col], name="Showed Up", marker_color="#22c55e",
+                         text=cdf[showup_col], textposition="outside",
+                         textfont=dict(size=10), cliponaxis=False), secondary_y=False)
+    pct_labels = cdf["showup_pct"].apply(lambda v: f"{v:.0f}%" if pd.notna(v) else "")
     fig.add_trace(go.Scatter(x=cdf[dim], y=cdf["showup_pct"], name="Show-up %",
-                             mode="lines+markers",
+                             mode="lines+markers+text",
                              line=dict(color="#f59e0b", width=2),
-                             marker=dict(size=6)), secondary_y=True)
+                             marker=dict(size=6),
+                             text=pct_labels, textposition="top center",
+                             textfont=dict(size=10)), secondary_y=True)
     fig.update_layout(
         title=title, barmode="group", height=320,
         margin=dict(t=50, b=10),

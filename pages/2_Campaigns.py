@@ -5,6 +5,7 @@ from datetime import date
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
+from utils.charts import annotate
 
 st.set_page_config(page_title="Campaigns", layout="wide")
 st.title("Campaigns")
@@ -91,7 +92,8 @@ with col1:
                  title="Emails Sent per " + ("Week" if granularity == "Weekly" else "Month"),
                  labels={"sent": "Sent", dim: "Period"},
                  color_discrete_sequence=["#6366f1"])
-    fig.update_layout(height=320, margin=dict(t=40, b=20))
+    fig.update_layout(height=340, margin=dict(t=40, b=20))
+    annotate(fig)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 with col2:
@@ -105,8 +107,9 @@ with col2:
                    title="Bounce & Unsub Rate per " + ("Week" if granularity == "Weekly" else "Month"),
                    labels={"value": "%", dim: "Period"},
                    color_discrete_sequence=["#ef4444", "#f59e0b"], markers=True)
-    fig2.update_layout(height=320, legend_title="",
+    fig2.update_layout(height=340, legend_title="",
                        yaxis=dict(ticksuffix="%"))
+    annotate(fig2, fmt=".1f", pct=True)
     st.caption("Reply rate is not shown per-week — replies arrive days to weeks after the send. See Funnel Overview for cohort-corrected reply rates.")
     st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 

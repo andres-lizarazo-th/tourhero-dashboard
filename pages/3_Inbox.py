@@ -4,6 +4,7 @@ import plotly.express as px
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.bq import query, PROJECT
+from utils.charts import annotate
 
 st.set_page_config(page_title="Inbox", layout="wide")
 
@@ -85,7 +86,8 @@ with col1:
                  title="Inbox Volume per " + ("Week" if granularity=="Weekly" else "Month"),
                  labels={dim:"Period","count":"Messages"},
                  color_discrete_sequence=["#6366f1","#f59e0b"])
-    fig.update_layout(height=300, legend_title="Channel")
+    fig.update_layout(height=320, legend_title="Channel")
+    annotate(fig, bar_position="inside")
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 with col2:
@@ -100,7 +102,8 @@ with col2:
                   labels={dim:"Period","count":"Messages","reply_sentiment":"Sentiment"},
                   color_discrete_map=SENTIMENT_COLORS,
                   category_orders={"reply_sentiment": SENTIMENT_ORDER})
-    fig2.update_layout(height=300, legend_title="Sentiment")
+    fig2.update_layout(height=320, legend_title="Sentiment")
+    annotate(fig2, bar_position="inside")
     st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 
 # ── Row 2: Category breakdown + Temp donut ───────────────────────────────────
@@ -116,6 +119,7 @@ with col3:
                   color_discrete_map=SENTIMENT_COLORS,
                   category_orders={"reply_sentiment": SENTIMENT_ORDER})
     fig3.update_layout(height=420, legend_title="Sentiment")
+    annotate(fig3, bar_position="inside")
     st.plotly_chart(fig3, use_container_width=True, config=CHART_CFG)
 
 with col4:
@@ -125,6 +129,7 @@ with col4:
                   title="Overall Sentiment Mix", hole=0.45,
                   color="reply_sentiment",
                   color_discrete_map=SENTIMENT_COLORS)
+    fig4.update_traces(textinfo="label+value+percent", textposition="inside", textfont_size=11)
     fig4.update_layout(height=260)
     st.plotly_chart(fig4, use_container_width=True, config=CHART_CFG)
 
@@ -135,6 +140,7 @@ with col4:
         temp_cnt.columns = ["temperature","count"]
         fig5 = px.pie(temp_cnt, names="temperature", values="count",
                       title="Email Temperature", hole=0.45)
+        fig5.update_traces(textinfo="label+value+percent", textposition="inside", textfont_size=11)
         fig5.update_layout(height=260)
         st.plotly_chart(fig5, use_container_width=True, config=CHART_CFG)
 
@@ -156,6 +162,7 @@ if len(mgr_df) > 0:
                       color_discrete_map=SENTIMENT_COLORS,
                       category_orders={"reply_sentiment": SENTIMENT_ORDER})
         fig6.update_layout(height=max(280, len(mgr_total) * 40), legend_title="Sentiment")
+        annotate(fig6, bar_position="inside")
         st.plotly_chart(fig6, use_container_width=True, config=CHART_CFG)
 
     with col6:
@@ -175,6 +182,7 @@ if len(mgr_df) > 0:
                       labels={"count":"Messages","manager":"Manager"},
                       color_discrete_map={"Replied":"#22c55e","Not Replied":"#94a3b8"})
         fig7.update_layout(height=max(280, len(mgr_total) * 40), legend_title="")
+        annotate(fig7, bar_position="inside")
         st.plotly_chart(fig7, use_container_width=True, config=CHART_CFG)
 
 st.divider()
