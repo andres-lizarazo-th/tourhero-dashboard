@@ -87,6 +87,7 @@ with col1:
                  labels={dim:"Period","count":"Messages"},
                  color_discrete_sequence=["#6366f1","#f59e0b"])
     fig.update_layout(height=320, legend_title="Channel")
+    fig.update_xaxes(type="category")
     annotate(fig, bar_position="inside")
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
@@ -103,6 +104,7 @@ with col2:
                   color_discrete_map=SENTIMENT_COLORS,
                   category_orders={"reply_sentiment": SENTIMENT_ORDER})
     fig2.update_layout(height=320, legend_title="Sentiment")
+    fig2.update_xaxes(type="category")
     annotate(fig2, bar_position="inside")
     st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 

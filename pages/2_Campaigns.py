@@ -86,13 +86,22 @@ st.divider()
 dim = "week_start" if granularity == "Weekly" else "month_key"
 
 col1, col2 = st.columns(2)
+
+def _sort_monthly(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    df = df.copy()
+    df["__s"] = pd.to_datetime(df[col], format="%b %Y", errors="coerce")
+    return df.sort_values("__s").drop(columns=["__s"])
+
 with col1:
     ts = fdf.groupby(dim)[["sent", "replied"]].sum().reset_index()
+    if dim == "month_key":
+        ts = _sort_monthly(ts, "month_key")
     fig = px.bar(ts, x=dim, y="sent",
                  title="Emails Sent per " + ("Week" if granularity == "Weekly" else "Month"),
                  labels={"sent": "Sent", dim: "Period"},
                  color_discrete_sequence=["#6366f1"])
     fig.update_layout(height=340, margin=dict(t=40, b=20))
+    fig.update_xaxes(type="category")
     annotate(fig)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
@@ -101,6 +110,8 @@ with col2:
     # Reply rate is NOT shown per-week because replies lag behind sends by days to weeks;
     # the cohort-correct reply rate is shown on the Funnel Overview page.
     rates = fdf.groupby(dim)[["sent", "bounced", "unsubscribed"]].sum().reset_index()
+    if dim == "month_key":
+        rates = _sort_monthly(rates, "month_key")
     rates["Bounce %"] = (rates["bounced"]      / rates["sent"] * 100).where(rates["sent"] > 0)
     rates["Unsub %"]  = (rates["unsubscribed"] / rates["sent"] * 100).where(rates["sent"] > 0)
     fig2 = px.line(rates, x=dim, y=["Bounce %", "Unsub %"],
@@ -109,6 +120,7 @@ with col2:
                    color_discrete_sequence=["#ef4444", "#f59e0b"], markers=True)
     fig2.update_layout(height=340, legend_title="",
                        yaxis=dict(ticksuffix="%"))
+    fig2.update_xaxes(type="category")
     annotate(fig2, fmt=".1f", pct=True)
     st.caption("Reply rate is not shown per-week — replies arrive days to weeks after the send. See Funnel Overview for cohort-corrected reply rates.")
     st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)

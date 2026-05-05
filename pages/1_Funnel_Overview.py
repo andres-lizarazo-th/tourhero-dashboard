@@ -26,10 +26,8 @@ today = date.today()
 ytd_start = date(today.year, 1, 1)
 
 METRIC_OPTIONS = {
-    "Outreach Emails":          "contacted",
-    "Replied":                  "replied",
-    "Planning Calls (GTM Conv.)": "planning_called",
-    "Deals Created":            "dealt",
+    "Outreach Emails": "contacted",
+    "Replied":         "replied",
 }
 
 with st.sidebar:
@@ -113,6 +111,13 @@ GROUP BY 1, 2
 ORDER BY 1
 """
 lm_monthly_df = query(sql_lm_monthly)
+# Convert "2026-01" → "Jan 2026" for display (after query while still sortable)
+lm_monthly_df = lm_monthly_df.sort_values("contact_month")
+lm_monthly_df["contact_month"] = (
+    pd.to_datetime(lm_monthly_df["contact_month"], format="%Y-%m", errors="coerce")
+    .dt.strftime("%b %Y")
+    .fillna(lm_monthly_df["contact_month"])
+)
 
 # ── Sidebar segment / campaign filters ───────────────────────────────────────
 all_segs  = sorted(df["lead_segment"].dropna().unique())
@@ -202,8 +207,10 @@ monthly_agg = (
     .groupby("contact_month")[["contacted","replied","onboarding","planning","dealt"]]
     .sum()
     .reset_index()
-    .sort_values("contact_month")
 )
+# Sort chronologically ("Jan 2026" doesn't sort alphabetically)
+monthly_agg["__s"] = pd.to_datetime(monthly_agg["contact_month"], format="%b %Y", errors="coerce")
+monthly_agg = monthly_agg.sort_values("__s").drop(columns=["__s"])
 monthly_agg["reply_rate"]  = (monthly_agg["replied"]    / monthly_agg["contacted"]  * 100).round(1)
 monthly_agg["onb_rate"]    = (monthly_agg["onboarding"] / monthly_agg["replied"]    * 100).round(1)
 monthly_agg["plan_rate"]   = (monthly_agg["planning"]   / monthly_agg["onboarding"] * 100).round(1)
@@ -231,6 +238,7 @@ if len(monthly_agg) > 0:
             )
             fig_r.update_layout(height=260, margin=dict(t=40, b=10), showlegend=False,
                                 yaxis=dict(ticksuffix="%"))
+            fig_r.update_xaxes(type="category")
             annotate(fig_r, fmt=".1f", pct=True)
             st.plotly_chart(fig_r, use_container_width=True, config=CHART_CFG)
 
@@ -243,6 +251,7 @@ if len(monthly_agg) > 0:
     )
     fig_c2p.update_layout(height=260, margin=dict(t=40, b=10), showlegend=False,
                           yaxis=dict(ticksuffix="%"))
+    fig_c2p.update_xaxes(type="category")
     annotate(fig_c2p, fmt=".2f", pct=True)
     st.plotly_chart(fig_c2p, use_container_width=True, config=CHART_CFG)
 
@@ -252,17 +261,17 @@ st.divider()
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
 
 ts = fdf.groupby(dim)[list(METRIC_OPTIONS.values())].sum().reset_index()
+if dim == "month_key":
+    ts["__s"] = pd.to_datetime(ts["month_key"], format="%b %Y", errors="coerce")
+    ts = ts.sort_values("__s").drop(columns=["__s"])
 
 TREND_CHARTS = [
-    ("Outreach Emails",          "contacted",      "#6366f1", "bar"),
-    ("Replied",                  "replied",        "#f59e0b", "bar"),
-    ("Planning Calls (GTM KPI)", "planning_called","#22c55e", "bar"),
-    ("Deals Created",            "dealt",          "#ef4444", "bar"),
+    ("Outreach Emails", "contacted", "#6366f1", "bar"),
+    ("Replied",         "replied",   "#f59e0b", "bar"),
 ]
 
 t1, t2 = st.columns(2)
-t3, t4 = st.columns(2)
-for col, (label, metric, color, _) in zip([t1, t2, t3, t4], TREND_CHARTS):
+for col, (label, metric, color, _) in zip([t1, t2], TREND_CHARTS):
     with col:
         fig_t = px.bar(
             ts, x=dim, y=metric,
@@ -271,6 +280,7 @@ for col, (label, metric, color, _) in zip([t1, t2, t3, t4], TREND_CHARTS):
             color_discrete_sequence=[color],
         )
         fig_t.update_layout(height=280, margin=dict(t=40, b=10), showlegend=False)
+        fig_t.update_xaxes(type="category")
         annotate(fig_t)
         st.plotly_chart(fig_t, use_container_width=True, config=CHART_CFG)
 
@@ -299,7 +309,44 @@ ORDER BY 1
 """
 calls_df = query(sql_calls)
 
+sql_deals_activity = f"""
+SELECT
+  DATE_TRUNC(DATE(deal_created_at), WEEK(MONDAY)) AS week_start,
+  FORMAT_DATE('%Y%m', DATE(deal_created_at))       AS month_key,
+  COUNT(*) AS deals_count
+FROM `{PROJECT}`.analytics.leads_master
+WHERE deal_created_at IS NOT NULL
+  AND DATE(deal_created_at) BETWEEN '{d_from}' AND '{d_to}'
+GROUP BY 1, 2
+ORDER BY 1
+"""
+deals_activity_df = query(sql_deals_activity)
+
+sql_bookings = f"""
+SELECT
+  DATE_TRUNC(booking_date, WEEK(MONDAY)) AS week_start,
+  FORMAT_DATE('%Y%m', booking_date)       AS month_key,
+  COUNT(*) AS bookings_count
+FROM `{PROJECT}`.operations.imp_bookings
+WHERE booking_status = 'confirmed'
+  AND booking_date BETWEEN '{d_from}' AND '{d_to}'
+GROUP BY 1, 2
+ORDER BY 1
+"""
+bookings_df = query(sql_bookings)
+
 calls_dim = "week_start" if granularity == "Weekly" else "month_key"
+
+# Aggregate by month when monthly mode (raw data has one row per week)
+if calls_dim == "month_key":
+    calls_plot = (
+        calls_df.groupby("month_key")[["onb_booked","onb_showed_up","plan_booked","plan_showed_up"]]
+        .sum().reset_index()
+    )
+    calls_plot["__s"] = pd.to_datetime(calls_plot["month_key"], format="%b %Y", errors="coerce")
+    calls_plot = calls_plot.sort_values("__s").drop(columns=["__s"])
+else:
+    calls_plot = calls_df
 
 
 def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, title: str):
@@ -328,6 +375,7 @@ def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, 
     )
     fig.update_yaxes(title_text="Calls", secondary_y=False)
     fig.update_yaxes(title_text="Show-up %", ticksuffix="%", range=[0, 110], secondary_y=True)
+    fig.update_xaxes(type="category")
     return fig
 
 
@@ -335,20 +383,63 @@ st.subheader("Calls")
 
 col_onb, col_plan = st.columns(2)
 with col_onb:
-    if len(calls_df) > 0:
-        st.plotly_chart(_calls_chart(calls_df, calls_dim, "onb_booked", "onb_showed_up",
+    if len(calls_plot) > 0:
+        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "onb_booked", "onb_showed_up",
                                      "Onboarding Calls — Booked vs Showed Up"),
                         use_container_width=True, config=CHART_CFG)
     else:
         st.info("No onboarding call data for this period.")
 
 with col_plan:
-    if len(calls_df) > 0:
-        st.plotly_chart(_calls_chart(calls_df, calls_dim, "plan_booked", "plan_showed_up",
+    if len(calls_plot) > 0:
+        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "plan_booked", "plan_showed_up",
                                      "Planning Calls — Booked vs Showed Up"),
                         use_container_width=True, config=CHART_CFG)
     else:
         st.info("No planning call data for this period.")
+
+st.divider()
+st.subheader("Deals & Bookings")
+
+activity_dim = "week_start" if granularity == "Weekly" else "month_key"
+
+if activity_dim == "month_key":
+    deals_plot = deals_activity_df.groupby("month_key")[["deals_count"]].sum().reset_index()
+    deals_plot["__s"] = pd.to_datetime(deals_plot["month_key"], format="%b %Y", errors="coerce")
+    deals_plot = deals_plot.sort_values("__s").drop(columns=["__s"])
+    bookings_plot = bookings_df.groupby("month_key")[["bookings_count"]].sum().reset_index()
+    bookings_plot["__s"] = pd.to_datetime(bookings_plot["month_key"], format="%b %Y", errors="coerce")
+    bookings_plot = bookings_plot.sort_values("__s").drop(columns=["__s"])
+else:
+    deals_plot = deals_activity_df
+    bookings_plot = bookings_df
+
+col_deals, col_book = st.columns(2)
+with col_deals:
+    if len(deals_plot) > 0:
+        fig_deals = px.bar(deals_plot, x=activity_dim, y="deals_count",
+                           title="Deals Created",
+                           labels={activity_dim: "", "deals_count": "Deals"},
+                           color_discrete_sequence=["#ef4444"])
+        fig_deals.update_layout(height=320, margin=dict(t=40, b=10), showlegend=False)
+        fig_deals.update_xaxes(type="category")
+        annotate(fig_deals)
+        st.plotly_chart(fig_deals, use_container_width=True, config=CHART_CFG)
+    else:
+        st.info("No deals data for this period.")
+
+with col_book:
+    if len(bookings_plot) > 0:
+        fig_book = px.bar(bookings_plot, x=activity_dim, y="bookings_count",
+                          title="Confirmed Bookings",
+                          labels={activity_dim: "", "bookings_count": "Bookings"},
+                          color_discrete_sequence=["#22c55e"])
+        fig_book.update_layout(height=320, margin=dict(t=40, b=10), showlegend=False)
+        fig_book.update_xaxes(type="category")
+        annotate(fig_book)
+        st.plotly_chart(fig_book, use_container_width=True, config=CHART_CFG)
+    else:
+        st.info("No confirmed bookings data for this period.")
 
 st.divider()
 st.subheader("Segment Breakdown")

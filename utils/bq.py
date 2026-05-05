@@ -64,17 +64,25 @@ _WEEK_DATE_COLS = {"cohort_week", "week_start", "month_start"}
 def query(sql: str) -> pd.DataFrame:
     job = _client().query(sql, location=LOCATION)
     df = job.to_dataframe(create_bqstorage_client=False)
-    # Force month_key (YYYYMM) to str (object dtype) — astype("string") returns
-    # pd.StringDtype which Plotly still treats as numeric, rendering "202,604k".
+    # Convert month_key YYYYMM int → "Jan 2026" label so Plotly treats it as
+    # categorical text, not a number (avoids "202.601k" axis rendering).
     if "month_key" in df.columns:
-        df["month_key"] = df["month_key"].astype(str)
-    # Force Monday-truncated DATE columns to YYYY-MM-DD strings (object dtype)
-    # so Plotly treats them as discrete categorical labels, not UTC timestamps.
+        mk = df["month_key"].astype(str).str.zfill(6)
+        df["month_key"] = (
+            pd.to_datetime(mk, format="%Y%m", errors="coerce")
+            .dt.strftime("%b %Y")
+            .fillna(mk)
+        )
+    # Format Monday-truncated DATE columns as "20 Apr" so Plotly cannot
+    # auto-parse them as dates (which would shift tick labels to the nearest Sunday).
     for col in _WEEK_DATE_COLS & set(df.columns):
         if pd.api.types.is_datetime64_any_dtype(df[col]):
-            df[col] = df[col].dt.strftime("%Y-%m-%d")
+            dt = df[col]
         elif df[col].dtype == "object":
-            df[col] = pd.to_datetime(df[col]).dt.strftime("%Y-%m-%d")
+            dt = pd.to_datetime(df[col], errors="coerce")
+        else:
+            continue
+        df[col] = dt.dt.strftime("%-d %b")
     return df
 
 
