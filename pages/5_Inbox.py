@@ -78,6 +78,30 @@ SENTIMENT_COLORS = {"Positive": "#22c55e", "Neutral": "#94a3b8", "Negative": "#e
 st.divider()
 dim = "week_start" if granularity == "Weekly" else "month_key"
 
+def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Sort '%-d %b' week labels chronologically; handles year boundary by
+    assuming any date that would be in the future belongs to the prior year."""
+    df = df.copy()
+    today_y = pd.Timestamp.today().year
+    base = pd.to_datetime(df[col] + f" {today_y}", errors="coerce")
+    future = pd.Timestamp.today() + pd.Timedelta(days=7)
+    mask = base > future
+    base.loc[mask] = pd.to_datetime(df.loc[mask, col] + f" {today_y - 1}", errors="coerce")
+    df["__s"] = base
+    return df.sort_values("__s").drop(columns=["__s"])
+
+# Compute chronological week/month order from the raw filtered data
+if dim == "week_start":
+    _period_order = _sort_weekly(
+        pd.DataFrame({dim: fdf[dim].dropna().unique()}), dim
+    )[dim].tolist()
+else:
+    _period_order = (
+        pd.DataFrame({dim: fdf[dim].dropna().unique()})
+        .assign(__s=lambda d: pd.to_datetime(d[dim], format="%b %Y", errors="coerce"))
+        .sort_values("__s").drop(columns=["__s"])[dim].tolist()
+    )
+
 # ── Row 1: Volume by channel + Sentiment stacked bar ─────────────────────────
 col1, col2 = st.columns(2)
 with col1:
@@ -85,9 +109,10 @@ with col1:
     fig = px.bar(ts, x=dim, y="count", color="channel",
                  title="Inbox Volume per " + ("Week" if granularity=="Weekly" else "Month"),
                  labels={dim:"Period","count":"Messages"},
-                 color_discrete_sequence=["#6366f1","#f59e0b"])
+                 color_discrete_sequence=["#6366f1","#f59e0b"],
+                 category_orders={dim: _period_order})
     fig.update_layout(height=320, legend_title="Channel")
-    fig.update_xaxes(type="category")
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=_period_order)
     annotate(fig, bar_position="inside")
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
@@ -102,9 +127,9 @@ with col2:
                   title="Reply Sentiment per " + ("Week" if granularity=="Weekly" else "Month"),
                   labels={dim:"Period","count":"Messages","reply_sentiment":"Sentiment"},
                   color_discrete_map=SENTIMENT_COLORS,
-                  category_orders={"reply_sentiment": SENTIMENT_ORDER})
+                  category_orders={dim: _period_order, "reply_sentiment": SENTIMENT_ORDER})
     fig2.update_layout(height=320, legend_title="Sentiment")
-    fig2.update_xaxes(type="category")
+    fig2.update_xaxes(type="category", categoryorder="array", categoryarray=_period_order)
     annotate(fig2, bar_position="inside")
     st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)
 

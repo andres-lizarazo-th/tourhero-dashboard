@@ -92,16 +92,29 @@ def _sort_monthly(df: pd.DataFrame, col: str) -> pd.DataFrame:
     df["__s"] = pd.to_datetime(df[col], format="%b %Y", errors="coerce")
     return df.sort_values("__s").drop(columns=["__s"])
 
+def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Sort rows whose date column is '%-d %b' strings, chronologically."""
+    df = df.copy()
+    base = pd.to_datetime(df[col] + f" {d_from.year}", errors="coerce")
+    if d_from.year != d_to.year:
+        alt  = pd.to_datetime(df[col] + f" {d_to.year}", errors="coerce")
+        base = base.where(base >= pd.Timestamp(d_from), other=alt)
+    df["__s"] = base
+    return df.sort_values("__s").drop(columns=["__s"])
+
 with col1:
     ts = fdf.groupby(dim)[["sent", "replied"]].sum().reset_index()
     if dim == "month_key":
         ts = _sort_monthly(ts, "month_key")
+    else:
+        ts = _sort_weekly(ts, dim)
     fig = px.bar(ts, x=dim, y="sent",
                  title="Emails Sent per " + ("Week" if granularity == "Weekly" else "Month"),
                  labels={"sent": "Sent", dim: "Period"},
-                 color_discrete_sequence=["#6366f1"])
+                 color_discrete_sequence=["#6366f1"],
+                 category_orders={dim: ts[dim].tolist()})
     fig.update_layout(height=340, margin=dict(t=40, b=20))
-    fig.update_xaxes(type="category")
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=ts[dim].tolist())
     annotate(fig)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
@@ -112,15 +125,18 @@ with col2:
     rates = fdf.groupby(dim)[["sent", "bounced", "unsubscribed"]].sum().reset_index()
     if dim == "month_key":
         rates = _sort_monthly(rates, "month_key")
+    else:
+        rates = _sort_weekly(rates, dim)
     rates["Bounce %"] = (rates["bounced"]      / rates["sent"] * 100).where(rates["sent"] > 0)
     rates["Unsub %"]  = (rates["unsubscribed"] / rates["sent"] * 100).where(rates["sent"] > 0)
     fig2 = px.line(rates, x=dim, y=["Bounce %", "Unsub %"],
                    title="Bounce & Unsub Rate per " + ("Week" if granularity == "Weekly" else "Month"),
                    labels={"value": "%", dim: "Period"},
-                   color_discrete_sequence=["#ef4444", "#f59e0b"], markers=True)
+                   color_discrete_sequence=["#ef4444", "#f59e0b"], markers=True,
+                   category_orders={dim: rates[dim].tolist()})
     fig2.update_layout(height=340, legend_title="",
                        yaxis=dict(ticksuffix="%"))
-    fig2.update_xaxes(type="category")
+    fig2.update_xaxes(type="category", categoryorder="array", categoryarray=rates[dim].tolist())
     annotate(fig2, fmt=".1f", pct=True)
     st.caption("Reply rate is not shown per-week — replies arrive days to weeks after the send. See Funnel Overview for cohort-corrected reply rates.")
     st.plotly_chart(fig2, use_container_width=True, config=CHART_CFG)

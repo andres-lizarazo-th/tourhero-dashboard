@@ -38,6 +38,16 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
 else:
     d_from, d_to = ytd_start, today
 
+def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Sort rows whose date column is '%-d %b' strings, chronologically."""
+    df = df.copy()
+    base = pd.to_datetime(df[col] + f" {d_from.year}", errors="coerce")
+    if d_from.year != d_to.year:
+        alt  = pd.to_datetime(df[col] + f" {d_to.year}", errors="coerce")
+        base = base.where(base >= pd.Timestamp(d_from), other=alt)
+    df["__s"] = base
+    return df.sort_values("__s").drop(columns=["__s"])
+
 st.caption(f"Showing data from **{d_from}** to **{d_to}** · Granularity: **{granularity}**")
 
 def fmt_currency(x): return f"${x:,.0f}" if pd.notna(x) and x else "—"
@@ -119,24 +129,28 @@ ts  = funnel.groupby(dim)[["contacted", "onboarding_called", "planning_called"]]
 if dim == "month_key":
     ts["__s"] = pd.to_datetime(ts["month_key"], format="%b %Y", errors="coerce")
     ts = ts.sort_values("__s").drop(columns=["__s"])
+else:
+    ts = _sort_weekly(ts, dim)
 
 a1, a2 = st.columns(2)
 with a1:
     fig = px.bar(ts, x=dim, y="contacted",
                  title="Outreach Emails per " + ("Week" if granularity == "Weekly" else "Month"),
                  labels={dim: "", "contacted": "Emails"},
-                 color_discrete_sequence=["#6366f1"])
+                 color_discrete_sequence=["#6366f1"],
+                 category_orders={dim: ts[dim].tolist()})
     fig.update_layout(height=280, margin=dict(t=40, b=20))
-    fig.update_xaxes(type="category")
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=ts[dim].tolist())
     annotate(fig)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 with a2:
     fig = px.bar(ts, x=dim, y="planning_called",
                  title="Planning Calls per " + ("Week" if granularity == "Weekly" else "Month"),
                  labels={dim: "", "planning_called": "Planning Calls"},
-                 color_discrete_sequence=["#22c55e"])
+                 color_discrete_sequence=["#22c55e"],
+                 category_orders={dim: ts[dim].tolist()})
     fig.update_layout(height=280, margin=dict(t=40, b=20))
-    fig.update_xaxes(type="category")
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=ts[dim].tolist())
     annotate(fig)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
@@ -185,23 +199,26 @@ else:
     deals_ts = deals_ts.sort_values("__s").drop(columns=["__s"])
 
 b1, b2 = st.columns(2)
+_deals_cat = deals_ts[dim_b].tolist()
 with b1:
     fig = px.bar(deals_ts, x=dim_b, y="deals",
                  title="Deals Created per " + ("Week" if granularity == "Weekly" else "Month"),
                  labels={dim_b: "", "deals": "Deals"},
-                 color_discrete_sequence=["#6366f1"])
+                 color_discrete_sequence=["#6366f1"],
+                 category_orders={dim_b: _deals_cat})
     fig.update_layout(height=280, margin=dict(t=40, b=20))
-    fig.update_xaxes(type="category")
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=_deals_cat)
     annotate(fig)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 with b2:
     fig = px.bar(deals_ts, x=dim_b, y="est_gbv",
                  title="Est. GBV per " + ("Week" if granularity == "Weekly" else "Month"),
                  labels={dim_b: "", "est_gbv": "GBV (USD)"},
-                 color_discrete_sequence=["#22c55e"])
+                 color_discrete_sequence=["#22c55e"],
+                 category_orders={dim_b: _deals_cat})
     fig.update_layout(height=280, margin=dict(t=40, b=20),
                       yaxis_tickprefix="$", yaxis_tickformat=",.0f")
-    fig.update_xaxes(type="category")
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=_deals_cat)
     annotate(fig)
     st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
@@ -241,10 +258,11 @@ if total_deals:
     fig_wr = px.line(wr_ts, x=dim_b, y="Win Rate %",
                      title="Win Rate Trend per " + ("Week" if granularity == "Weekly" else "Month"),
                      labels={dim_b: ""},
-                     color_discrete_sequence=["#22c55e"], markers=True)
+                     color_discrete_sequence=["#22c55e"], markers=True,
+                     category_orders={dim_b: _deals_cat})
     fig_wr.update_layout(height=280, margin=dict(t=40, b=20),
                          yaxis=dict(ticksuffix="%", range=[0, 100]))
-    fig_wr.update_xaxes(type="category")
+    fig_wr.update_xaxes(type="category", categoryorder="array", categoryarray=_deals_cat)
     st.plotly_chart(fig_wr, use_container_width=True, config=CHART_CFG)
 
 # =============================================================================

@@ -45,6 +45,17 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
 else:
     d_from, d_to = ytd_start, today
 
+def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Sort rows whose date column is '%-d %b' strings, chronologically.
+    Infers year from d_from/d_to; handles ranges that span a year boundary."""
+    df = df.copy()
+    base = pd.to_datetime(df[col] + f" {d_from.year}", errors="coerce")
+    if d_from.year != d_to.year:
+        alt  = pd.to_datetime(df[col] + f" {d_to.year}", errors="coerce")
+        base = base.where(base >= pd.Timestamp(d_from), other=alt)
+    df["__s"] = base
+    return df.sort_values("__s").drop(columns=["__s"])
+
 # ── Load 1: touch-level volumes from v_funnel_by_segment ─────────────────────
 sql = f"""
 SELECT lead_segment, campaign_id, campaign_name, cohort_week, month_key,
@@ -267,6 +278,8 @@ ts = fdf.groupby(dim)[list(METRIC_OPTIONS.values())].sum().reset_index()
 if dim == "month_key":
     ts["__s"] = pd.to_datetime(ts["month_key"], format="%b %Y", errors="coerce")
     ts = ts.sort_values("__s").drop(columns=["__s"])
+else:
+    ts = _sort_weekly(ts, dim)
 
 TREND_CHARTS = [
     ("Outreach Emails", "contacted", "#6366f1", "bar"),
@@ -281,9 +294,11 @@ for col, (label, metric, color, _) in zip([t1, t2], TREND_CHARTS):
             title=label,
             labels={dim: "", metric: label},
             color_discrete_sequence=[color],
+            category_orders={dim: ts[dim].tolist()},
         )
         fig_t.update_layout(height=280, margin=dict(t=40, b=10), showlegend=False)
-        fig_t.update_xaxes(type="category")
+        fig_t.update_xaxes(type="category", categoryorder="array",
+                           categoryarray=ts[dim].tolist())
         annotate(fig_t)
         st.plotly_chart(fig_t, use_container_width=True, config=CHART_CFG)
 
@@ -410,7 +425,9 @@ def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, scheduled_col: st
     if ymax is not None:
         fig.update_yaxes(range=[0, ymax * 1.2], secondary_y=False)
     fig.update_yaxes(title_text="Show-up %", ticksuffix="%", range=[0, 110], secondary_y=True)
-    fig.update_xaxes(type="category")
+    # Force chronological order (SQL returns ORDER BY week_start; prevent Plotly alpha-sort)
+    fig.update_xaxes(type="category", categoryorder="array",
+                     categoryarray=cdf[dim].tolist())
     return fig
 
 
@@ -454,8 +471,8 @@ if activity_dim == "month_key":
     bookings_plot["__s"] = pd.to_datetime(bookings_plot["month_key"], format="%b %Y", errors="coerce")
     bookings_plot = bookings_plot.sort_values("__s").drop(columns=["__s"])
 else:
-    deals_plot = deals_activity_df
-    bookings_plot = bookings_df
+    deals_plot    = _sort_weekly(deals_activity_df,  "week_start") if len(deals_activity_df)  > 0 else deals_activity_df
+    bookings_plot = _sort_weekly(bookings_df, "week_start")         if len(bookings_df) > 0         else bookings_df
 
 col_deals, col_book = st.columns(2)
 with col_deals:
@@ -463,9 +480,11 @@ with col_deals:
         fig_deals = px.bar(deals_plot, x=activity_dim, y="deals_count",
                            title="Deals Created",
                            labels={activity_dim: "", "deals_count": "Deals"},
-                           color_discrete_sequence=["#ef4444"])
+                           color_discrete_sequence=["#ef4444"],
+                           category_orders={activity_dim: deals_plot[activity_dim].tolist()})
         fig_deals.update_layout(height=320, margin=dict(t=40, b=10), showlegend=False)
-        fig_deals.update_xaxes(type="category")
+        fig_deals.update_xaxes(type="category", categoryorder="array",
+                               categoryarray=deals_plot[activity_dim].tolist())
         annotate(fig_deals)
         st.plotly_chart(fig_deals, use_container_width=True, config=CHART_CFG)
     else:
@@ -476,9 +495,11 @@ with col_book:
         fig_book = px.bar(bookings_plot, x=activity_dim, y="bookings_count",
                           title="Confirmed Bookings",
                           labels={activity_dim: "", "bookings_count": "Bookings"},
-                          color_discrete_sequence=["#22c55e"])
+                          color_discrete_sequence=["#22c55e"],
+                          category_orders={activity_dim: bookings_plot[activity_dim].tolist()})
         fig_book.update_layout(height=320, margin=dict(t=40, b=10), showlegend=False)
-        fig_book.update_xaxes(type="category")
+        fig_book.update_xaxes(type="category", categoryorder="array",
+                              categoryarray=bookings_plot[activity_dim].tolist())
         annotate(fig_book)
         st.plotly_chart(fig_book, use_container_width=True, config=CHART_CFG)
     else:
