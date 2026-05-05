@@ -93,12 +93,15 @@ def _sort_monthly(df: pd.DataFrame, col: str) -> pd.DataFrame:
     return df.sort_values("__s").drop(columns=["__s"])
 
 def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
-    """Sort rows whose date column is '%-d %b' strings, chronologically."""
+    """Sort '%-d %b' week labels chronologically, handling year boundaries."""
     df = df.copy()
-    base = pd.to_datetime(df[col] + f" {d_from.year}", errors="coerce")
-    if d_from.year != d_to.year:
-        alt  = pd.to_datetime(df[col] + f" {d_to.year}", errors="coerce")
-        base = base.where(base >= pd.Timestamp(d_from), other=alt)
+    yr   = d_from.year
+    base = pd.to_datetime(df[col] + f" {yr}", errors="coerce")
+    late  = base > pd.Timestamp(d_to) + pd.Timedelta(days=7)
+    base.loc[late] = pd.to_datetime(df.loc[late, col] + f" {yr - 1}", errors="coerce")
+    if yr != d_to.year:
+        early = base < pd.Timestamp(d_from) - pd.Timedelta(days=7)
+        base.loc[early] = pd.to_datetime(df.loc[early, col] + f" {d_to.year}", errors="coerce")
     df["__s"] = base
     return df.sort_values("__s").drop(columns=["__s"])
 

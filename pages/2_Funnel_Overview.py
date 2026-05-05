@@ -46,13 +46,19 @@ else:
     d_from, d_to = ytd_start, today
 
 def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
-    """Sort rows whose date column is '%-d %b' strings, chronologically.
-    Infers year from d_from/d_to; handles ranges that span a year boundary."""
+    """Sort '%-d %b' week labels chronologically, handling year boundaries.
+    Weeks whose Monday falls before d_from (e.g. '29 Dec' in a Jan–May range)
+    are assigned to the prior year so they sort first, not last."""
     df = df.copy()
-    base = pd.to_datetime(df[col] + f" {d_from.year}", errors="coerce")
-    if d_from.year != d_to.year:
-        alt  = pd.to_datetime(df[col] + f" {d_to.year}", errors="coerce")
-        base = base.where(base >= pd.Timestamp(d_from), other=alt)
+    yr   = d_from.year
+    base = pd.to_datetime(df[col] + f" {yr}", errors="coerce")
+    # Dates that parsed to after d_to must belong to the prior year
+    late  = base > pd.Timestamp(d_to) + pd.Timedelta(days=7)
+    base.loc[late] = pd.to_datetime(df.loc[late, col] + f" {yr - 1}", errors="coerce")
+    # Cross-year filter range: dates before d_from in the base-year parse → next year
+    if yr != d_to.year:
+        early = base < pd.Timestamp(d_from) - pd.Timedelta(days=7)
+        base.loc[early] = pd.to_datetime(df.loc[early, col] + f" {d_to.year}", errors="coerce")
     df["__s"] = base
     return df.sort_values("__s").drop(columns=["__s"])
 
@@ -396,14 +402,15 @@ else:
 
 
 def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, scheduled_col: str,
-                 showup_col: str, title: str, ymax: float = None):
+                 showup_col: str, title: str, ymax: float = None,
+                 main_label: str = "Booked"):
     cdf = cdf.copy()
     # Show-up % = showed_up / total scheduled for that week (by start_time)
     cdf["showup_pct"] = (
         cdf[showup_col] / cdf[scheduled_col].replace(0, None) * 100
     ).round(1)
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[booked_col], name="Booked", marker_color="#6366f1",
+    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[booked_col], name=main_label, marker_color="#6366f1",
                          text=cdf[booked_col], textposition="inside",
                          textfont=dict(size=10, color="white")), secondary_y=False)
     fig.add_trace(go.Bar(x=cdf[dim], y=cdf[showup_col], name="Showed Up", marker_color="#22c55e",
@@ -433,17 +440,18 @@ def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, scheduled_col: st
 
 st.subheader("Calls")
 
-# Shared Y-axis max so both charts use the same scale and are visually comparable
+# Shared Y-axis max across all 4 charts for a consistent visual scale
 _calls_ymax = (
-    max(calls_plot["onb_booked"].max(), calls_plot["plan_booked"].max()) * 1.0
+    calls_plot[["onb_booked", "plan_booked", "onb_scheduled", "plan_scheduled"]].max().max()
     if len(calls_plot) > 0 else None
 )
 
+st.caption("**Scheduled AT** — grouped by when the invitee booked the call (`invitee_created_at`)")
 col_onb, col_plan = st.columns(2)
 with col_onb:
     if len(calls_plot) > 0:
         st.plotly_chart(_calls_chart(calls_plot, calls_dim, "onb_booked", "onb_scheduled",
-                                     "onb_showed_up", "Onboarding Calls — Booked vs Showed Up",
+                                     "onb_showed_up", "Onboarding — Booked AT",
                                      ymax=_calls_ymax),
                         use_container_width=True, config=CHART_CFG)
     else:
@@ -452,8 +460,28 @@ with col_onb:
 with col_plan:
     if len(calls_plot) > 0:
         st.plotly_chart(_calls_chart(calls_plot, calls_dim, "plan_booked", "plan_scheduled",
-                                     "plan_showed_up", "Planning Calls — Booked vs Showed Up",
+                                     "plan_showed_up", "Planning — Booked AT",
                                      ymax=_calls_ymax),
+                        use_container_width=True, config=CHART_CFG)
+    else:
+        st.info("No planning call data for this period.")
+
+st.caption("**Scheduled FOR** — grouped by when the call actually takes place (`start_time`)")
+col_onb2, col_plan2 = st.columns(2)
+with col_onb2:
+    if len(calls_plot) > 0:
+        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "onb_scheduled", "onb_scheduled",
+                                     "onb_showed_up", "Onboarding — Scheduled FOR",
+                                     ymax=_calls_ymax, main_label="Scheduled For"),
+                        use_container_width=True, config=CHART_CFG)
+    else:
+        st.info("No onboarding call data for this period.")
+
+with col_plan2:
+    if len(calls_plot) > 0:
+        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "plan_scheduled", "plan_scheduled",
+                                     "plan_showed_up", "Planning — Scheduled FOR",
+                                     ymax=_calls_ymax, main_label="Scheduled For"),
                         use_container_width=True, config=CHART_CFG)
     else:
         st.info("No planning call data for this period.")
