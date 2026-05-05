@@ -38,7 +38,7 @@ with st.sidebar:
     segs      = st.multiselect("Segment",  sorted(df["lead_segment"].dropna().unique()))
     temps     = st.multiselect("Temperature", sorted(df["temperature"].dropna().unique()))
     managers  = st.multiselect("Manager",  sorted(df["manager"].dropna().unique()))
-    meeting   = st.selectbox("Meeting Booked", ["All","Yes","No"])
+    meeting   = st.selectbox("Meeting Booked", ["All","Meeting Booked","Not Booked"])
     granularity = st.radio("Granularity", ["Weekly","Monthly"], horizontal=True)
 
 cutoff = pd.Timestamp.today(tz="UTC") - pd.Timedelta(days=days)
@@ -47,20 +47,29 @@ if channels: fdf = fdf[fdf["channel"].isin(channels)]
 if segs:     fdf = fdf[fdf["lead_segment"].isin(segs)]
 if temps:    fdf = fdf[fdf["temperature"].isin(temps)]
 if managers: fdf = fdf[fdf["manager"].isin(managers)]
-if meeting != "All": fdf = fdf[fdf["meeting_booked"] == meeting]
+if meeting == "Meeting Booked":
+    fdf = fdf[fdf["meeting_booked"] == "Meeting Booked"]
+elif meeting == "Not Booked":
+    fdf = fdf[fdf["meeting_booked"].isna() | (fdf["meeting_booked"] != "Meeting Booked")]
 
 total_msgs    = len(fdf)
-replied_msgs  = (fdf["our_reply"].notna() & (fdf["our_reply"].astype(str).str.strip() != "")).sum()
-auto_replies  = fdf["ai_send_automatic_reply"].fillna(False).astype(bool).sum()
-meetings      = (fdf["meeting_booked"] == "Yes").sum()
-reply_rate    = replied_msgs / total_msgs * 100 if total_msgs else 0
+unique_leads  = fdf["lead_email"].dropna().nunique()
+positive_msgs = (fdf["reply_sentiment"] == "Positive").sum()
+negative_msgs = (fdf["reply_sentiment"] == "Negative").sum()
+meetings      = (fdf["meeting_booked"] == "Meeting Booked").sum()
+reply_rate    = positive_msgs / total_msgs * 100 if total_msgs else 0
 
-c1,c2,c3,c4,c5 = st.columns(5)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 with c1: st.metric("Total Messages",   f'{total_msgs:,}')
-with c2: st.metric("Replied Messages", f'{replied_msgs:,}')
-with c3: st.metric("Automated Replies", f'{auto_replies:,}')
-with c4: st.metric("Meetings Booked",  f'{meetings:,}')
-with c5: st.metric("Reply Rate",       f'{reply_rate:.1f}%')
+with c2: st.metric("Unique Leads",     f'{unique_leads:,}',
+                   help="Distinct lead emails in the filtered inbox")
+with c3: st.metric("Positive Replies", f'{positive_msgs:,}',
+                   help="Meeting Request, Interested, Confirmed, etc.")
+with c4: st.metric("Negative Replies", f'{negative_msgs:,}',
+                   help="Not Interested, Do Not Contact, Wrong Target, Cancellation")
+with c5: st.metric("Meetings Booked",  f'{meetings:,}')
+with c6: st.metric("Positive Rate",    f'{reply_rate:.1f}%',
+                   help="Positive replies / total messages")
 
 SENTIMENT_ORDER  = ["Positive", "Neutral", "Negative"]
 SENTIMENT_COLORS = {"Positive": "#22c55e", "Neutral": "#94a3b8", "Negative": "#ef4444"}

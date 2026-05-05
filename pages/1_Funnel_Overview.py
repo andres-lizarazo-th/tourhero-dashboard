@@ -23,7 +23,7 @@ today = date.today()
 ytd_start = date(today.year, 1, 1)
 
 METRIC_OPTIONS = {
-    "Outreach Touches":         "contacted",
+    "Outreach Emails":          "contacted",
     "Replied":                  "replied",
     "Planning Calls (GTM Conv.)": "planning_called",
     "Deals Created":            "dealt",
@@ -124,10 +124,10 @@ onb         = int(fdf["onboarding_called"].sum())
 planning    = int(fdf["planning_called"].sum())
 dealt       = int(fdf["dealt"].sum())
 
-st.markdown("**Outreach Volumes** (touch-level: each lead × campaign counts separately)")
+st.markdown("**Outreach Volumes** (email-level: each lead × campaign first-send counts separately)")
 v1, v2, v3, v4, v5, v6 = st.columns(6)
-with v1: st.metric("Outreach Touches",  f"{contacted:,}",
-                   help="Each (lead × campaign) first-send counts as one touch.")
+with v1: st.metric("Outreach Emails",   f"{contacted:,}",
+                   help="Each (lead × campaign) first-send counts as one outreach email.")
 with v2: st.metric("Replied",           f"{replied:,}")
 with v3: st.metric("Onboarding Calls",  f"{onb:,}")
 with v4: st.metric("Planning Calls",    f"{planning:,}",
@@ -178,11 +178,11 @@ st.divider()
 # ── Trend charts ──────────────────────────────────────────────────────────────
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
 
-st.markdown("**Outreach Touches per Period** (aggregated across selected segments)")
+st.markdown("**Outreach Emails per Period** (aggregated across selected segments)")
 ts_touches = fdf.groupby(dim)[["contacted"]].sum().reset_index()
 fig_touches = px.bar(
     ts_touches, x=dim, y="contacted",
-    labels={dim: "Period", "contacted": "Touches"},
+    labels={dim: "Period", "contacted": "Emails Sent"},
     color_discrete_sequence=["#6366f1"],
 )
 fig_touches.update_layout(height=300, margin=dict(t=20, b=20), showlegend=False)
@@ -200,11 +200,75 @@ fig.update_layout(height=280, margin=dict(t=20, b=20), showlegend=False)
 st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
 
 st.divider()
+
+# ── Calls charts (Calendly) ───────────────────────────────────────────────────
+ONB_PATTERN  = r"(?i)(Creator Trip Collab|VIP Program.*Onboarding|Onboarding Session)"
+PLAN_PATTERN = r"(?i)(Plan(ning)? your Trip with TourHero|meet-your-planning-inspiration-expert|vip-planning-call)"
+
+sql_calls = f"""
+SELECT
+  DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY))  AS week_start,
+  FORMAT_DATE('%Y%m', DATE(invitee_created_at))        AS month_key,
+  COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}'))                                              AS onb_booked,
+  COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}')
+          AND invitee_status = 'active' AND no_show IS NOT TRUE)                                      AS onb_showed_up,
+  COUNTIF(REGEXP_CONTAINS(event_name, r'{PLAN_PATTERN}'))                                             AS plan_booked,
+  COUNTIF(REGEXP_CONTAINS(event_name, r'{PLAN_PATTERN}')
+          AND invitee_status = 'active' AND no_show IS NOT TRUE)                                      AS plan_showed_up
+FROM `{PROJECT}`.calendly.calendly_events
+WHERE invitee_created_at >= TIMESTAMP '{d_from}'
+  AND invitee_created_at <  TIMESTAMP_ADD(TIMESTAMP '{d_to}', INTERVAL 1 DAY)
+  AND LOWER(COALESCE(invitee_email, '')) NOT LIKE '%@tourhero.com'
+GROUP BY 1, 2
+ORDER BY 1
+"""
+calls_df = query(sql_calls)
+
+calls_dim = "week_start" if granularity == "Weekly" else "month_key"
+
+st.subheader("Calls")
+
+col_onb, col_plan = st.columns(2)
+with col_onb:
+    if len(calls_df) > 0:
+        st.markdown("**Onboarding Calls** (booked vs showed up)")
+        fig_onb = px.bar(
+            calls_df, x=calls_dim, y=["onb_booked", "onb_showed_up"],
+            barmode="group",
+            labels={calls_dim: "Week Booked", "value": "Calls", "variable": ""},
+            color_discrete_map={"onb_booked": "#6366f1", "onb_showed_up": "#22c55e"},
+        )
+        fig_onb.for_each_trace(lambda t: t.update(
+            name={"onb_booked": "Booked", "onb_showed_up": "Showed Up"}.get(t.name, t.name)
+        ))
+        fig_onb.update_layout(height=300, margin=dict(t=20, b=20), legend_title="")
+        st.plotly_chart(fig_onb, use_container_width=True, config=CHART_CFG)
+    else:
+        st.info("No onboarding call data for this period.")
+
+with col_plan:
+    if len(calls_df) > 0:
+        st.markdown("**Planning Calls** (booked vs showed up)")
+        fig_plan = px.bar(
+            calls_df, x=calls_dim, y=["plan_booked", "plan_showed_up"],
+            barmode="group",
+            labels={calls_dim: "Week Booked", "value": "Calls", "variable": ""},
+            color_discrete_map={"plan_booked": "#6366f1", "plan_showed_up": "#22c55e"},
+        )
+        fig_plan.for_each_trace(lambda t: t.update(
+            name={"plan_booked": "Booked", "plan_showed_up": "Showed Up"}.get(t.name, t.name)
+        ))
+        fig_plan.update_layout(height=300, margin=dict(t=20, b=20), legend_title="")
+        st.plotly_chart(fig_plan, use_container_width=True, config=CHART_CFG)
+    else:
+        st.info("No planning call data for this period.")
+
+st.divider()
 st.subheader("Segment Breakdown")
 
 # ── Segment table (touch-level volumes + per-lead conversion rates) ───────────
 seg_tbl = fdf.groupby("lead_segment").agg(
-    Touches=("contacted",          "sum"),
+    Emails=("contacted",           "sum"),
     Replied=("replied",            "sum"),
     Onboarding=("onboarding_called", "sum"),
     Planning=("planning_called",   "sum"),

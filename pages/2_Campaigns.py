@@ -46,8 +46,7 @@ FROM `{PROJECT}`.bison_tracking.v_campaign_performance
 WHERE stat_date BETWEEN '{d_from}' AND '{d_to}'
 """
 df = query(sql)
-df["stat_date"]  = pd.to_datetime(df["stat_date"])
-df["week_start"] = pd.to_datetime(df["week_start"])
+df["stat_date"] = pd.to_datetime(df["stat_date"])
 
 with st.sidebar:
     campaigns   = st.multiselect("Campaign", sorted(df["campaign_name"].dropna().unique()))
