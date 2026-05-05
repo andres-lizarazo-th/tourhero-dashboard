@@ -38,10 +38,6 @@ with st.sidebar:
         max_value=today,
     )
     granularity = st.radio("Granularity", ["Weekly", "Monthly"], horizontal=True)
-    st.divider()
-    trend_metric_label = st.radio("Trend metric", list(METRIC_OPTIONS.keys()), index=2)
-
-trend_metric = METRIC_OPTIONS[trend_metric_label]
 
 if isinstance(date_range, tuple) and len(date_range) == 2:
     d_from, d_to = date_range
@@ -178,26 +174,27 @@ st.divider()
 # ── Trend charts ──────────────────────────────────────────────────────────────
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
 
-st.markdown("**Outreach Emails per Period** (aggregated across selected segments)")
-ts_touches = fdf.groupby(dim)[["contacted"]].sum().reset_index()
-fig_touches = px.bar(
-    ts_touches, x=dim, y="contacted",
-    labels={dim: "Period", "contacted": "Emails Sent"},
-    color_discrete_sequence=["#6366f1"],
-)
-fig_touches.update_layout(height=300, margin=dict(t=20, b=20), showlegend=False)
-st.plotly_chart(fig_touches, use_container_width=True, config=CHART_CFG)
-
-st.markdown(f"**Trend: {trend_metric_label}** (aggregated across selected segments)")
 ts = fdf.groupby(dim)[list(METRIC_OPTIONS.values())].sum().reset_index()
-fig = px.line(
-    ts, x=dim, y=trend_metric,
-    labels={dim: "Period", trend_metric: trend_metric_label},
-    color_discrete_sequence=["#22c55e"],
-    markers=True,
-)
-fig.update_layout(height=280, margin=dict(t=20, b=20), showlegend=False)
-st.plotly_chart(fig, use_container_width=True, config=CHART_CFG)
+
+TREND_CHARTS = [
+    ("Outreach Emails",          "contacted",      "#6366f1", "bar"),
+    ("Replied",                  "replied",        "#f59e0b", "bar"),
+    ("Planning Calls (GTM KPI)", "planning_called","#22c55e", "bar"),
+    ("Deals Created",            "dealt",          "#ef4444", "bar"),
+]
+
+t1, t2 = st.columns(2)
+t3, t4 = st.columns(2)
+for col, (label, metric, color, _) in zip([t1, t2, t3, t4], TREND_CHARTS):
+    with col:
+        fig_t = px.bar(
+            ts, x=dim, y=metric,
+            title=label,
+            labels={dim: "", metric: label},
+            color_discrete_sequence=[color],
+        )
+        fig_t.update_layout(height=260, margin=dict(t=40, b=10), showlegend=False)
+        st.plotly_chart(fig_t, use_container_width=True, config=CHART_CFG)
 
 st.divider()
 
