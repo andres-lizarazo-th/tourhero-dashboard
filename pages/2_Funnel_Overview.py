@@ -53,7 +53,7 @@ def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
     yr   = d_from.year
     base = pd.to_datetime(df[col] + f" {yr}", errors="coerce")
     # Dates that parsed to after d_to must belong to the prior year
-    late  = base > pd.Timestamp(d_to) + pd.Timedelta(days=7)
+    late  = base > pd.Timestamp(d_to) + pd.Timedelta(days=90)
     base.loc[late] = pd.to_datetime(df.loc[late, col] + f" {yr - 1}", errors="coerce")
     # Cross-year filter range: dates before d_from in the base-year parse → next year
     if yr != d_to.year:
@@ -340,7 +340,7 @@ occurred AS (
             AND invitee_status = 'active' AND no_show IS NOT TRUE)                                   AS plan_showed_up
   FROM `{PROJECT}`.calendly.calendly_events
   WHERE start_time >= TIMESTAMP '{d_from}'
-    AND start_time <  TIMESTAMP_ADD(TIMESTAMP '{d_to}', INTERVAL 1 DAY)
+    AND start_time <  TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 60 DAY)
     AND LOWER(COALESCE(invitee_email, '')) NOT LIKE '%@tourhero.com'
   GROUP BY 1
 )
@@ -446,23 +446,38 @@ _calls_ymax = (
     if len(calls_plot) > 0 else None
 )
 
-st.caption("**Scheduled AT** — grouped by when the invitee booked the call (`invitee_created_at`)")
+st.caption("**Booked AT** — when was the call scheduled by the invitee (`invitee_created_at`)")
 col_onb, col_plan = st.columns(2)
+_cat = calls_plot[calls_dim].tolist() if len(calls_plot) > 0 else []
 with col_onb:
     if len(calls_plot) > 0:
-        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "onb_booked", "onb_scheduled",
-                                     "onb_showed_up", "Onboarding — Booked AT",
-                                     ymax=_calls_ymax),
-                        use_container_width=True, config=CHART_CFG)
+        _fig = px.bar(calls_plot, x=calls_dim, y="onb_booked",
+                      title="Onboarding — Booked AT",
+                      labels={calls_dim: "", "onb_booked": "Calls Booked"},
+                      color_discrete_sequence=["#6366f1"],
+                      category_orders={calls_dim: _cat})
+        _fig.update_layout(height=320, margin=dict(t=50, b=60), showlegend=False)
+        if _calls_ymax:
+            _fig.update_yaxes(range=[0, _calls_ymax * 1.2])
+        _fig.update_xaxes(type="category", categoryorder="array", categoryarray=_cat)
+        annotate(_fig)
+        st.plotly_chart(_fig, use_container_width=True, config=CHART_CFG)
     else:
         st.info("No onboarding call data for this period.")
 
 with col_plan:
     if len(calls_plot) > 0:
-        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "plan_booked", "plan_scheduled",
-                                     "plan_showed_up", "Planning — Booked AT",
-                                     ymax=_calls_ymax),
-                        use_container_width=True, config=CHART_CFG)
+        _fig = px.bar(calls_plot, x=calls_dim, y="plan_booked",
+                      title="Planning — Booked AT",
+                      labels={calls_dim: "", "plan_booked": "Calls Booked"},
+                      color_discrete_sequence=["#6366f1"],
+                      category_orders={calls_dim: _cat})
+        _fig.update_layout(height=320, margin=dict(t=50, b=60), showlegend=False)
+        if _calls_ymax:
+            _fig.update_yaxes(range=[0, _calls_ymax * 1.2])
+        _fig.update_xaxes(type="category", categoryorder="array", categoryarray=_cat)
+        annotate(_fig)
+        st.plotly_chart(_fig, use_container_width=True, config=CHART_CFG)
     else:
         st.info("No planning call data for this period.")
 

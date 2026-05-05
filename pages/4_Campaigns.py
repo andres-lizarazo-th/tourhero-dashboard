@@ -97,7 +97,7 @@ def _sort_weekly(df: pd.DataFrame, col: str) -> pd.DataFrame:
     df = df.copy()
     yr   = d_from.year
     base = pd.to_datetime(df[col] + f" {yr}", errors="coerce")
-    late  = base > pd.Timestamp(d_to) + pd.Timedelta(days=7)
+    late  = base > pd.Timestamp(d_to) + pd.Timedelta(days=90)
     base.loc[late] = pd.to_datetime(df.loc[late, col] + f" {yr - 1}", errors="coerce")
     if yr != d_to.year:
         early = base < pd.Timestamp(d_from) - pd.Timedelta(days=7)
