@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import date
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -93,6 +95,24 @@ GROUP BY 1
 """
 lm_df = query(sql_lm)
 
+# ── Load 3: monthly per-lead counts by segment (for conversion rate trends) ───
+sql_lm_monthly = f"""
+SELECT
+  FORMAT_DATE('%Y-%m', DATE(first_contacted_at))   AS contact_month,
+  lead_segment,
+  COUNTIF(first_contacted_at IS NOT NULL)           AS contacted,
+  COUNTIF(last_reply_at IS NOT NULL)                AS replied,
+  COUNTIF(first_onboarding_call_at IS NOT NULL)     AS onboarding,
+  COUNTIF(first_planning_call_at IS NOT NULL)       AS planning,
+  COUNTIF(deal_created_at IS NOT NULL)              AS dealt
+FROM `{PROJECT}`.analytics.leads_master
+WHERE DATE(first_contacted_at) BETWEEN '{d_from}' AND '{d_to}'
+  AND lead_segment NOT IN ('unmatched-email-addresses')
+GROUP BY 1, 2
+ORDER BY 1
+"""
+lm_monthly_df = query(sql_lm_monthly)
+
 # ── Sidebar segment / campaign filters ───────────────────────────────────────
 all_segs  = sorted(df["lead_segment"].dropna().unique())
 all_camps = sorted(df["campaign_name"].dropna().unique())
@@ -105,6 +125,7 @@ if camps:
     fdf = fdf[fdf["campaign_name"].isin(camps)]
 
 lm_fdf = lm_df[lm_df["lead_segment"].isin(segs)] if segs else lm_df
+lm_monthly_fdf = lm_monthly_df[lm_monthly_df["lead_segment"].isin(segs)] if segs else lm_monthly_df
 
 seg_label  = ", ".join(segs)  if len(segs)  < len(all_segs)  else "all"
 camp_label = ", ".join(camps) if camps else "all"
@@ -171,6 +192,59 @@ if lm_contacted > 0:
 
 st.divider()
 
+# ── Monthly conversion rate trends ────────────────────────────────────────────
+st.subheader("Monthly Conversion Rate Trends")
+st.caption("Cohort view: of leads first contacted in each month, what % eventually reached each stage.")
+
+monthly_agg = (
+    lm_monthly_fdf
+    .groupby("contact_month")[["contacted","replied","onboarding","planning","dealt"]]
+    .sum()
+    .reset_index()
+    .sort_values("contact_month")
+)
+monthly_agg["reply_rate"]  = (monthly_agg["replied"]    / monthly_agg["contacted"]  * 100).round(1)
+monthly_agg["onb_rate"]    = (monthly_agg["onboarding"] / monthly_agg["replied"]    * 100).round(1)
+monthly_agg["plan_rate"]   = (monthly_agg["planning"]   / monthly_agg["onboarding"] * 100).round(1)
+monthly_agg["deal_rate"]   = (monthly_agg["dealt"]      / monthly_agg["planning"]   * 100).round(1)
+monthly_agg["c2plan_rate"] = (monthly_agg["planning"]   / monthly_agg["contacted"]  * 100).round(2)
+
+RATE_CHARTS = [
+    ("Contact → Reply %",       "reply_rate",  "#6366f1"),
+    ("Reply → Onboarding %",    "onb_rate",    "#f59e0b"),
+    ("Onboarding → Planning %", "plan_rate",   "#22c55e"),
+    ("Planning → Deal %",       "deal_rate",   "#ef4444"),
+]
+
+if len(monthly_agg) > 0:
+    mr1, mr2 = st.columns(2)
+    mr3, mr4 = st.columns(2)
+    for col, (label, col_name, color) in zip([mr1, mr2, mr3, mr4], RATE_CHARTS):
+        with col:
+            fig_r = px.line(
+                monthly_agg, x="contact_month", y=col_name,
+                title=label,
+                labels={"contact_month": "", col_name: "%"},
+                color_discrete_sequence=[color],
+                markers=True,
+            )
+            fig_r.update_layout(height=240, margin=dict(t=40, b=10), showlegend=False,
+                                yaxis=dict(ticksuffix="%"))
+            st.plotly_chart(fig_r, use_container_width=True, config=CHART_CFG)
+
+    fig_c2p = px.line(
+        monthly_agg, x="contact_month", y="c2plan_rate",
+        title="Contact → Planning % (end-to-end GTM conversion)",
+        labels={"contact_month": "", "c2plan_rate": "%"},
+        color_discrete_sequence=["#8b5cf6"],
+        markers=True,
+    )
+    fig_c2p.update_layout(height=240, margin=dict(t=40, b=10), showlegend=False,
+                          yaxis=dict(ticksuffix="%"))
+    st.plotly_chart(fig_c2p, use_container_width=True, config=CHART_CFG)
+
+st.divider()
+
 # ── Trend charts ──────────────────────────────────────────────────────────────
 dim = "cohort_week" if granularity == "Weekly" else "month_key"
 
@@ -223,40 +297,45 @@ calls_df = query(sql_calls)
 
 calls_dim = "week_start" if granularity == "Weekly" else "month_key"
 
+
+def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, title: str):
+    cdf = cdf.copy()
+    cdf["showup_pct"] = (
+        cdf[showup_col] / cdf[booked_col].replace(0, None) * 100
+    ).round(1)
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[booked_col],   name="Booked",     marker_color="#6366f1"), secondary_y=False)
+    fig.add_trace(go.Bar(x=cdf[dim], y=cdf[showup_col],   name="Showed Up",  marker_color="#22c55e"), secondary_y=False)
+    fig.add_trace(go.Scatter(x=cdf[dim], y=cdf["showup_pct"], name="Show-up %",
+                             mode="lines+markers",
+                             line=dict(color="#f59e0b", width=2),
+                             marker=dict(size=6)), secondary_y=True)
+    fig.update_layout(
+        title=title, barmode="group", height=320,
+        margin=dict(t=50, b=10),
+        legend=dict(orientation="h", y=-0.18),
+    )
+    fig.update_yaxes(title_text="Calls", secondary_y=False)
+    fig.update_yaxes(title_text="Show-up %", ticksuffix="%", range=[0, 110], secondary_y=True)
+    return fig
+
+
 st.subheader("Calls")
 
 col_onb, col_plan = st.columns(2)
 with col_onb:
     if len(calls_df) > 0:
-        st.markdown("**Onboarding Calls** (booked vs showed up)")
-        fig_onb = px.bar(
-            calls_df, x=calls_dim, y=["onb_booked", "onb_showed_up"],
-            barmode="group",
-            labels={calls_dim: "Week Booked", "value": "Calls", "variable": ""},
-            color_discrete_map={"onb_booked": "#6366f1", "onb_showed_up": "#22c55e"},
-        )
-        fig_onb.for_each_trace(lambda t: t.update(
-            name={"onb_booked": "Booked", "onb_showed_up": "Showed Up"}.get(t.name, t.name)
-        ))
-        fig_onb.update_layout(height=300, margin=dict(t=20, b=20), legend_title="")
-        st.plotly_chart(fig_onb, use_container_width=True, config=CHART_CFG)
+        st.plotly_chart(_calls_chart(calls_df, calls_dim, "onb_booked", "onb_showed_up",
+                                     "Onboarding Calls — Booked vs Showed Up"),
+                        use_container_width=True, config=CHART_CFG)
     else:
         st.info("No onboarding call data for this period.")
 
 with col_plan:
     if len(calls_df) > 0:
-        st.markdown("**Planning Calls** (booked vs showed up)")
-        fig_plan = px.bar(
-            calls_df, x=calls_dim, y=["plan_booked", "plan_showed_up"],
-            barmode="group",
-            labels={calls_dim: "Week Booked", "value": "Calls", "variable": ""},
-            color_discrete_map={"plan_booked": "#6366f1", "plan_showed_up": "#22c55e"},
-        )
-        fig_plan.for_each_trace(lambda t: t.update(
-            name={"plan_booked": "Booked", "plan_showed_up": "Showed Up"}.get(t.name, t.name)
-        ))
-        fig_plan.update_layout(height=300, margin=dict(t=20, b=20), legend_title="")
-        st.plotly_chart(fig_plan, use_container_width=True, config=CHART_CFG)
+        st.plotly_chart(_calls_chart(calls_df, calls_dim, "plan_booked", "plan_showed_up",
+                                     "Planning Calls — Booked vs Showed Up"),
+                        use_container_width=True, config=CHART_CFG)
     else:
         st.info("No planning call data for this period.")
 
