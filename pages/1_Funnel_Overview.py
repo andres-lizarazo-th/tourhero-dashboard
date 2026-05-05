@@ -292,8 +292,8 @@ PLAN_PATTERN = r"(?i)(Plan(ning)? (your|a) (next )?trip|Brainstorm with your Pla
 
 sql_calls = f"""
 SELECT
-  DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY))  AS week_start,
-  FORMAT_DATE('%Y%m', DATE(invitee_created_at))        AS month_key,
+  DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY))                            AS week_start,
+  FORMAT_DATE('%Y%m', DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY)))       AS month_key,
   COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}'))                                              AS onb_booked,
   COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}')
           AND invitee_status = 'active' AND no_show IS NOT TRUE)                                      AS onb_showed_up,
@@ -311,8 +311,8 @@ calls_df = query(sql_calls)
 
 sql_deals_activity = f"""
 SELECT
-  DATE_TRUNC(DATE(deal_created_at), WEEK(MONDAY)) AS week_start,
-  FORMAT_DATE('%Y%m', DATE(deal_created_at))       AS month_key,
+  DATE_TRUNC(DATE(deal_created_at), WEEK(MONDAY))                          AS week_start,
+  FORMAT_DATE('%Y%m', DATE_TRUNC(DATE(deal_created_at), WEEK(MONDAY)))     AS month_key,
   COUNT(*) AS deals_count
 FROM `{PROJECT}`.analytics.leads_master
 WHERE deal_created_at IS NOT NULL
@@ -321,15 +321,11 @@ GROUP BY 1, 2
 ORDER BY 1
 """
 deals_activity_df = query(sql_deals_activity)
-# Collapse any duplicate week values caused by mixed dtype conversion
-deals_activity_df = (
-    deals_activity_df.groupby(["week_start", "month_key"])["deals_count"].sum().reset_index()
-)
 
 sql_bookings = f"""
 SELECT
-  DATE_TRUNC(booking_date, WEEK(MONDAY)) AS week_start,
-  FORMAT_DATE('%Y%m', booking_date)       AS month_key,
+  DATE_TRUNC(booking_date, WEEK(MONDAY))                          AS week_start,
+  FORMAT_DATE('%Y%m', DATE_TRUNC(booking_date, WEEK(MONDAY)))     AS month_key,
   COUNT(*) AS bookings_count
 FROM `{PROJECT}`.operations.imp_bookings
 WHERE booking_status = 'confirmed'
@@ -338,9 +334,6 @@ GROUP BY 1, 2
 ORDER BY 1
 """
 bookings_df = query(sql_bookings)
-bookings_df = (
-    bookings_df.groupby(["week_start", "month_key"])["bookings_count"].sum().reset_index()
-)
 
 calls_dim = "week_start" if granularity == "Weekly" else "month_key"
 
@@ -364,11 +357,11 @@ def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, 
     ).round(1)
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=cdf[dim], y=cdf[booked_col], name="Booked", marker_color="#6366f1",
-                         text=cdf[booked_col], textposition="outside",
-                         textfont=dict(size=10), cliponaxis=False), secondary_y=False)
+                         text=cdf[booked_col], textposition="inside",
+                         textfont=dict(size=10, color="white")), secondary_y=False)
     fig.add_trace(go.Bar(x=cdf[dim], y=cdf[showup_col], name="Showed Up", marker_color="#22c55e",
-                         text=cdf[showup_col], textposition="outside",
-                         textfont=dict(size=10), cliponaxis=False), secondary_y=False)
+                         text=cdf[showup_col], textposition="inside",
+                         textfont=dict(size=10, color="white")), secondary_y=False)
     pct_labels = cdf["showup_pct"].apply(lambda v: f"{v:.0f}%" if pd.notna(v) else "")
     fig.add_trace(go.Scatter(x=cdf[dim], y=cdf["showup_pct"], name="Show-up %",
                              mode="lines+markers+text",
