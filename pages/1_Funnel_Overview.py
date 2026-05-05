@@ -321,6 +321,10 @@ GROUP BY 1, 2
 ORDER BY 1
 """
 deals_activity_df = query(sql_deals_activity)
+# Collapse any duplicate week values caused by mixed dtype conversion
+deals_activity_df = (
+    deals_activity_df.groupby(["week_start", "month_key"])["deals_count"].sum().reset_index()
+)
 
 sql_bookings = f"""
 SELECT
@@ -334,6 +338,9 @@ GROUP BY 1, 2
 ORDER BY 1
 """
 bookings_df = query(sql_bookings)
+bookings_df = (
+    bookings_df.groupby(["week_start", "month_key"])["bookings_count"].sum().reset_index()
+)
 
 calls_dim = "week_start" if granularity == "Weekly" else "month_key"
 
@@ -349,7 +356,8 @@ else:
     calls_plot = calls_df
 
 
-def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, title: str):
+def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, title: str,
+                 ymax: float = None):
     cdf = cdf.copy()
     cdf["showup_pct"] = (
         cdf[showup_col] / cdf[booked_col].replace(0, None) * 100
@@ -369,11 +377,13 @@ def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, 
                              text=pct_labels, textposition="top center",
                              textfont=dict(size=10)), secondary_y=True)
     fig.update_layout(
-        title=title, barmode="group", height=320,
-        margin=dict(t=50, b=10),
-        legend=dict(orientation="h", y=-0.18),
+        title=title, barmode="group", height=360,
+        margin=dict(t=50, b=60),
+        legend=dict(orientation="h", y=-0.22),
     )
     fig.update_yaxes(title_text="Calls", secondary_y=False)
+    if ymax is not None:
+        fig.update_yaxes(range=[0, ymax * 1.2], secondary_y=False)
     fig.update_yaxes(title_text="Show-up %", ticksuffix="%", range=[0, 110], secondary_y=True)
     fig.update_xaxes(type="category")
     return fig
@@ -381,11 +391,17 @@ def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, 
 
 st.subheader("Calls")
 
+# Shared Y-axis max so both charts use the same scale and are visually comparable
+_calls_ymax = (
+    max(calls_plot["onb_booked"].max(), calls_plot["plan_booked"].max()) * 1.0
+    if len(calls_plot) > 0 else None
+)
+
 col_onb, col_plan = st.columns(2)
 with col_onb:
     if len(calls_plot) > 0:
         st.plotly_chart(_calls_chart(calls_plot, calls_dim, "onb_booked", "onb_showed_up",
-                                     "Onboarding Calls — Booked vs Showed Up"),
+                                     "Onboarding Calls — Booked vs Showed Up", ymax=_calls_ymax),
                         use_container_width=True, config=CHART_CFG)
     else:
         st.info("No onboarding call data for this period.")
@@ -393,7 +409,7 @@ with col_onb:
 with col_plan:
     if len(calls_plot) > 0:
         st.plotly_chart(_calls_chart(calls_plot, calls_dim, "plan_booked", "plan_showed_up",
-                                     "Planning Calls — Booked vs Showed Up"),
+                                     "Planning Calls — Booked vs Showed Up", ymax=_calls_ymax),
                         use_container_width=True, config=CHART_CFG)
     else:
         st.info("No planning call data for this period.")

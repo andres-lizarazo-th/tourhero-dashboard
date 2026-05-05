@@ -75,14 +75,16 @@ def query(sql: str) -> pd.DataFrame:
         )
     # Format Monday-truncated DATE columns as "20 Apr" so Plotly cannot
     # auto-parse them as dates (which would shift tick labels to the nearest Sunday).
+    # Use astype(str).str[:10] to handle any dtype (datetime64, datetime.date,
+    # ArrowDtype date32, or plain ISO strings) uniformly.
     for col in _WEEK_DATE_COLS & set(df.columns):
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            dt = df[col]
-        elif df[col].dtype == "object":
-            dt = pd.to_datetime(df[col], errors="coerce")
+        series = df[col]
+        if pd.api.types.is_datetime64_any_dtype(series):
+            dt = series
         else:
-            continue
-        df[col] = dt.dt.strftime("%-d %b")
+            dt = pd.to_datetime(series.astype(str).str[:10], format="%Y-%m-%d", errors="coerce")
+        if dt.notna().any():
+            df[col] = dt.dt.strftime("%-d %b")
     return df
 
 
