@@ -207,7 +207,7 @@ st.caption("Cohort view: of leads first contacted in each month, what % eventual
 
 monthly_agg = (
     lm_monthly_fdf
-    .groupby("contact_month")[["contacted","replied","onboarding","planning","dealt"]]
+    .groupby("contact_month")[["contacted","replied","onboarding","planning","dealt","dealt_with_plan"]]
     .sum()
     .reset_index()
 )
