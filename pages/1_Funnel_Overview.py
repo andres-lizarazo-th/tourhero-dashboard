@@ -67,7 +67,7 @@ sql_lm = f"""
 SELECT
   lead_segment,
   COUNTIF(first_contacted_at IS NOT NULL)               AS lm_contacted,
-  COUNTIF(last_reply_at IS NOT NULL)                    AS lm_replied,
+  COUNTIF(last_reply_at IS NOT NULL AND last_reply_at >= first_contacted_at) AS lm_replied,
   COUNTIF(first_onboarding_call_at IS NOT NULL)         AS lm_onboarding,
   COUNTIF(first_planning_call_at IS NOT NULL)           AS lm_planning,
   COUNTIF(deal_created_at IS NOT NULL)                  AS lm_dealt,
@@ -100,7 +100,7 @@ SELECT
   FORMAT_DATE('%Y-%m', DATE(first_contacted_at))   AS contact_month,
   lead_segment,
   COUNTIF(first_contacted_at IS NOT NULL)           AS contacted,
-  COUNTIF(last_reply_at IS NOT NULL)                AS replied,
+  COUNTIF(last_reply_at IS NOT NULL AND last_reply_at >= first_contacted_at) AS replied,
   COUNTIF(first_onboarding_call_at IS NOT NULL)     AS onboarding,
   COUNTIF(first_planning_call_at IS NOT NULL)       AS planning,
   COUNTIF(deal_created_at IS NOT NULL)              AS dealt
