@@ -71,6 +71,7 @@ SELECT
   COUNTIF(first_onboarding_call_at IS NOT NULL)         AS lm_onboarding,
   COUNTIF(first_planning_call_at IS NOT NULL)           AS lm_planning,
   COUNTIF(deal_created_at IS NOT NULL)                  AS lm_dealt,
+  COUNTIF(deal_created_at IS NOT NULL AND first_planning_call_at IS NOT NULL) AS lm_dealt_for_rate,
   ROUND(AVG(CASE WHEN last_reply_at >= first_contacted_at
                  THEN TIMESTAMP_DIFF(last_reply_at, first_contacted_at, DAY) END), 1)
         AS avg_days_to_reply,
@@ -103,7 +104,8 @@ SELECT
   COUNTIF(last_reply_at IS NOT NULL AND last_reply_at >= first_contacted_at) AS replied,
   COUNTIF(first_onboarding_call_at IS NOT NULL)     AS onboarding,
   COUNTIF(first_planning_call_at IS NOT NULL)       AS planning,
-  COUNTIF(deal_created_at IS NOT NULL)              AS dealt
+  COUNTIF(deal_created_at IS NOT NULL)              AS dealt,
+  COUNTIF(deal_created_at IS NOT NULL AND first_planning_call_at IS NOT NULL) AS dealt_with_plan
 FROM `{PROJECT}`.analytics.leads_master
 WHERE DATE(first_contacted_at) BETWEEN '{d_from}' AND '{d_to}'
   AND lead_segment NOT IN ('unmatched-email-addresses')
@@ -164,12 +166,13 @@ lm_contacted   = int(lm_tot.get("lm_contacted",  0))
 lm_replied     = int(lm_tot.get("lm_replied",    0))
 lm_onboarding  = int(lm_tot.get("lm_onboarding", 0))
 lm_planning    = int(lm_tot.get("lm_planning",   0))
-lm_dealt       = int(lm_tot.get("lm_dealt",      0))
+lm_dealt           = int(lm_tot.get("lm_dealt",          0))
+lm_dealt_for_rate  = int(lm_tot.get("lm_dealt_for_rate", 0))
 
-reply_rt    = lm_replied    / lm_contacted   * 100 if lm_contacted   else 0
-onb_rt      = lm_onboarding / lm_replied     * 100 if lm_replied     else 0
-plan_rt     = lm_planning   / lm_onboarding  * 100 if lm_onboarding  else 0
-deal_rt     = lm_dealt      / lm_planning    * 100 if lm_planning    else 0
+reply_rt    = lm_replied       / lm_contacted  * 100 if lm_contacted  else 0
+onb_rt      = lm_onboarding    / lm_replied    * 100 if lm_replied    else 0
+plan_rt     = lm_planning      / lm_onboarding * 100 if lm_onboarding else 0
+deal_rt     = lm_dealt_for_rate / lm_planning  * 100 if lm_planning   else 0
 contact2plan = lm_planning  / lm_contacted   * 100 if lm_contacted   else 0
 
 st.markdown("**Per-Lead Conversion Funnel** (unique leads — same lead contacted by 2 campaigns counts once)")
@@ -214,7 +217,7 @@ monthly_agg = monthly_agg.sort_values("__s").drop(columns=["__s"])
 monthly_agg["reply_rate"]  = (monthly_agg["replied"]    / monthly_agg["contacted"]  * 100).round(1)
 monthly_agg["onb_rate"]    = (monthly_agg["onboarding"] / monthly_agg["replied"]    * 100).round(1)
 monthly_agg["plan_rate"]   = (monthly_agg["planning"]   / monthly_agg["onboarding"] * 100).round(1)
-monthly_agg["deal_rate"]   = (monthly_agg["dealt"]      / monthly_agg["planning"]   * 100).round(1)
+monthly_agg["deal_rate"]   = (monthly_agg["dealt_with_plan"] / monthly_agg["planning"] * 100).round(1)
 monthly_agg["c2plan_rate"] = (monthly_agg["planning"]   / monthly_agg["contacted"]  * 100).round(2)
 
 RATE_CHARTS = [
@@ -291,20 +294,47 @@ ONB_PATTERN  = r"(?i)(Creator Trip Collab|Community Trip Collab|Wellness Trip Co
 PLAN_PATTERN = r"(?i)(Plan(ning)? (your|a) (next )?trip|Brainstorm with your Planning Expert|Meet your Inspiration Expert|Planning Call|Start Planning Your Dream Trip|Let.s Plan Your Trip)"
 
 sql_calls = f"""
+-- Booked: grouped by when the invitee scheduled (invitee_created_at)
+-- Showed Up: grouped by when the call actually took place (start_time)
+WITH booked AS (
+  SELECT
+    DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY))                       AS week_start,
+    FORMAT_DATE('%Y%m', DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY))) AS month_key,
+    COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}'))  AS onb_booked,
+    COUNTIF(REGEXP_CONTAINS(event_name, r'{PLAN_PATTERN}')) AS plan_booked
+  FROM `{PROJECT}`.calendly.calendly_events
+  WHERE invitee_created_at >= TIMESTAMP '{d_from}'
+    AND invitee_created_at <  TIMESTAMP_ADD(TIMESTAMP '{d_to}', INTERVAL 1 DAY)
+    AND LOWER(COALESCE(invitee_email, '')) NOT LIKE '%@tourhero.com'
+  GROUP BY 1, 2
+),
+occurred AS (
+  SELECT
+    DATE_TRUNC(DATE(start_time), WEEK(MONDAY)) AS week_start,
+    COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}'))                                           AS onb_scheduled,
+    COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}')
+            AND invitee_status = 'active' AND no_show IS NOT TRUE)                                   AS onb_showed_up,
+    COUNTIF(REGEXP_CONTAINS(event_name, r'{PLAN_PATTERN}'))                                          AS plan_scheduled,
+    COUNTIF(REGEXP_CONTAINS(event_name, r'{PLAN_PATTERN}')
+            AND invitee_status = 'active' AND no_show IS NOT TRUE)                                   AS plan_showed_up
+  FROM `{PROJECT}`.calendly.calendly_events
+  WHERE start_time >= TIMESTAMP '{d_from}'
+    AND start_time <  TIMESTAMP_ADD(TIMESTAMP '{d_to}', INTERVAL 1 DAY)
+    AND LOWER(COALESCE(invitee_email, '')) NOT LIKE '%@tourhero.com'
+  GROUP BY 1
+)
 SELECT
-  DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY))                            AS week_start,
-  FORMAT_DATE('%Y%m', DATE_TRUNC(DATE(invitee_created_at), WEEK(MONDAY)))       AS month_key,
-  COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}'))                                              AS onb_booked,
-  COUNTIF(REGEXP_CONTAINS(event_name, r'{ONB_PATTERN}')
-          AND invitee_status = 'active' AND no_show IS NOT TRUE)                                      AS onb_showed_up,
-  COUNTIF(REGEXP_CONTAINS(event_name, r'{PLAN_PATTERN}'))                                             AS plan_booked,
-  COUNTIF(REGEXP_CONTAINS(event_name, r'{PLAN_PATTERN}')
-          AND invitee_status = 'active' AND no_show IS NOT TRUE)                                      AS plan_showed_up
-FROM `{PROJECT}`.calendly.calendly_events
-WHERE invitee_created_at >= TIMESTAMP '{d_from}'
-  AND invitee_created_at <  TIMESTAMP_ADD(TIMESTAMP '{d_to}', INTERVAL 1 DAY)
-  AND LOWER(COALESCE(invitee_email, '')) NOT LIKE '%@tourhero.com'
-GROUP BY 1, 2
+  COALESCE(b.week_start, o.week_start)                                         AS week_start,
+  COALESCE(b.month_key,
+    FORMAT_DATE('%Y%m', DATE_TRUNC(COALESCE(b.week_start, o.week_start), WEEK(MONDAY)))) AS month_key,
+  COALESCE(b.onb_booked,    0) AS onb_booked,
+  COALESCE(o.onb_scheduled, 0) AS onb_scheduled,
+  COALESCE(o.onb_showed_up, 0) AS onb_showed_up,
+  COALESCE(b.plan_booked,    0) AS plan_booked,
+  COALESCE(o.plan_scheduled, 0) AS plan_scheduled,
+  COALESCE(o.plan_showed_up, 0) AS plan_showed_up
+FROM booked b
+FULL OUTER JOIN occurred o ON b.week_start = o.week_start
 ORDER BY 1
 """
 calls_df = query(sql_calls)
@@ -340,7 +370,8 @@ calls_dim = "week_start" if granularity == "Weekly" else "month_key"
 # Aggregate by month when monthly mode (raw data has one row per week)
 if calls_dim == "month_key":
     calls_plot = (
-        calls_df.groupby("month_key")[["onb_booked","onb_showed_up","plan_booked","plan_showed_up"]]
+        calls_df.groupby("month_key")[["onb_booked","onb_scheduled","onb_showed_up",
+                                       "plan_booked","plan_scheduled","plan_showed_up"]]
         .sum().reset_index()
     )
     calls_plot["__s"] = pd.to_datetime(calls_plot["month_key"], format="%b %Y", errors="coerce")
@@ -349,11 +380,12 @@ else:
     calls_plot = calls_df
 
 
-def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, showup_col: str, title: str,
-                 ymax: float = None):
+def _calls_chart(cdf: pd.DataFrame, dim: str, booked_col: str, scheduled_col: str,
+                 showup_col: str, title: str, ymax: float = None):
     cdf = cdf.copy()
+    # Show-up % = showed_up / total scheduled for that week (by start_time)
     cdf["showup_pct"] = (
-        cdf[showup_col] / cdf[booked_col].replace(0, None) * 100
+        cdf[showup_col] / cdf[scheduled_col].replace(0, None) * 100
     ).round(1)
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=cdf[dim], y=cdf[booked_col], name="Booked", marker_color="#6366f1",
@@ -393,16 +425,18 @@ _calls_ymax = (
 col_onb, col_plan = st.columns(2)
 with col_onb:
     if len(calls_plot) > 0:
-        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "onb_booked", "onb_showed_up",
-                                     "Onboarding Calls — Booked vs Showed Up", ymax=_calls_ymax),
+        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "onb_booked", "onb_scheduled",
+                                     "onb_showed_up", "Onboarding Calls — Booked vs Showed Up",
+                                     ymax=_calls_ymax),
                         use_container_width=True, config=CHART_CFG)
     else:
         st.info("No onboarding call data for this period.")
 
 with col_plan:
     if len(calls_plot) > 0:
-        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "plan_booked", "plan_showed_up",
-                                     "Planning Calls — Booked vs Showed Up", ymax=_calls_ymax),
+        st.plotly_chart(_calls_chart(calls_plot, calls_dim, "plan_booked", "plan_scheduled",
+                                     "plan_showed_up", "Planning Calls — Booked vs Showed Up",
+                                     ymax=_calls_ymax),
                         use_container_width=True, config=CHART_CFG)
     else:
         st.info("No planning call data for this period.")
