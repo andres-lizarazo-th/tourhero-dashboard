@@ -287,8 +287,8 @@ for col, (label, metric, color, _) in zip([t1, t2], TREND_CHARTS):
 st.divider()
 
 # ── Calls charts (Calendly) ───────────────────────────────────────────────────
-ONB_PATTERN  = r"(?i)(Creator Trip Collab|VIP Program.*Onboarding|Onboarding Session)"
-PLAN_PATTERN = r"(?i)(Plan(ning)? your Trip with TourHero|meet-your-planning-inspiration-expert|vip-planning-call)"
+ONB_PATTERN  = r"(?i)(Creator Trip Collab|Community Trip Collab|Wellness Trip Collab|Outdoor Trip Collab|VIP.*Onboarding|Onboarding Session|Group Trips|MBA|HBS|campus)"
+PLAN_PATTERN = r"(?i)(Plan(ning)? (your|a) (next )?trip|Brainstorm with your Planning Expert|Meet your Inspiration Expert|Planning Call|Start Planning Your Dream Trip|Let.s Plan Your Trip)"
 
 sql_calls = f"""
 SELECT
